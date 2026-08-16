@@ -9,17 +9,14 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe Meta bridge POST query selector safely
+      - name: Probe Meta bridge session operations safely
         shell: bash
         run: |
           set -e
           base='https://vensure-meta-ads-bridge.vercel.app/api/meta'
-          urls=(
-            "$base?op=set_status" "$base?action=set_status" "$base?write=set_status"
-            "$base?operation=set_status" "$base?cmd=set_status" "$base?mode=set_status"
-          )
-          for u in "${urls[@]}"; do
-            echo "--- $u"
-            curl -sS -i -X POST "$u" -H 'Content-Type: application/json' --data '{}' | tail -n 1
+          ops=(login session start_session create_session auth help info)
+          for op in "${ops[@]}"; do
+            echo "--- POST op=$op"
+            curl -sS -X POST "$base?op=$op" -H 'Content-Type: application/json' --data '{}'
             echo
           done
