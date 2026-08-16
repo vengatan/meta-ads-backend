@@ -9,20 +9,17 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Locate Meta bridge write routes with GET only
+      - name: Probe Meta bridge POST query selector safely
         shell: bash
         run: |
           set -e
-          base='https://vensure-meta-ads-bridge.vercel.app'
-          paths=(
-            '/api/meta/status' '/api/meta/budget' '/api/meta/campaign' '/api/meta/object'
-            '/api/meta/set-status' '/api/meta/set-budget' '/api/meta/create-campaign' '/api/meta/update-object'
-            '/api/set_status' '/api/set_budget' '/api/create_campaign' '/api/update_object'
-            '/api/status' '/api/budget' '/api/campaign' '/api/object'
+          base='https://vensure-meta-ads-bridge.vercel.app/api/meta'
+          urls=(
+            "$base?op=set_status" "$base?action=set_status" "$base?write=set_status"
+            "$base?operation=set_status" "$base?cmd=set_status" "$base?mode=set_status"
           )
-          for p in "${paths[@]}"; do
-            code=$(curl -sS -o /tmp/body -w '%{http_code}' "$base$p")
-            printf '%s %s ' "$code" "$p"
-            head -c 240 /tmp/body | tr '\n' ' '
+          for u in "${urls[@]}"; do
+            echo "--- $u"
+            curl -sS -i -X POST "$u" -H 'Content-Type: application/json' --data '{}' | tail -n 1
             echo
           done
