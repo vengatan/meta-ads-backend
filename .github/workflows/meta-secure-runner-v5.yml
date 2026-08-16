@@ -1,0 +1,80 @@
+name: Meta Secure Runner V5
+on:
+  push:
+    paths:
+      - '.github/workflows/meta-secure-runner-v5.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish run-specific ephemeral public key
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out /tmp/meta_private.pem >/dev/null 2>&1
+          openssl pkey -in /tmp/meta_private.pem -pubout -out /tmp/meta_public.pem >/dev/null 2>&1
+          base64 -w0 /tmp/meta_public.pem > /tmp/meta_public.pem.b64
+          python - <<'PY'
+          import base64,json,os,urllib.request
+          run_id=os.environ['GITHUB_RUN_ID']
+          path=f'.secure/meta_public_{run_id}.pem.b64'
+          api=f'https://api.github.com/repos/vengatan/meta-ads-backend/contents/{path}'
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}
+          raw=open('/tmp/meta_public.pem.b64','rb').read()
+          body={'message':f'Publish ephemeral Meta public key {run_id}','content':base64.b64encode(raw).decode()}
+          req=urllib.request.Request(api,data=json.dumps(body).encode(),headers={**headers,'Content-Type':'application/json'},method='PUT')
+          with urllib.request.urlopen(req,timeout=30) as r: r.read()
+          print('EPHEMERAL_PUBLIC_KEY_PUBLISHED run='+run_id)
+          PY
+
+      - name: Wait for run-specific encrypted token hex
+        shell: python
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          import base64,json,os,time,urllib.request,urllib.error
+          run_id=os.environ['GITHUB_RUN_ID']
+          path=f'.secure/meta_token_{run_id}.hex'
+          api=f'https://api.github.com/repos/vengatan/meta-ads-backend/contents/{path}?ref=main'
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Cache-Control':'no-cache'}
+          for i in range(120):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(api,headers=headers),timeout=30) as r:
+                      obj=json.loads(r.read().decode())
+                  cipher=bytes.fromhex(base64.b64decode(obj['content']).decode().strip())
+                  if len(cipher)==512:
+                      open('/tmp/meta_token.bin','wb').write(cipher)
+                      print('ENCRYPTED_TOKEN_RECEIVED run='+run_id)
+                      break
+                  raise RuntimeError(f'Unexpected RSA ciphertext length {len(cipher)}')
+              except urllib.error.HTTPError as e:
+                  if e.code!=404: raise
+              time.sleep(5)
+          else:
+              raise SystemExit('Encrypted token was not received in time')
+
+      - name: Decrypt, apply current Meta API requirement, execute capped tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl pkeyutl -decrypt -inkey /tmp/meta_private.pem -in /tmp/meta_token.bin -out /tmp/meta_token.txt
+          chmod 600 /tmp/meta_token.txt
+          python - <<'PY'
+          p='meta_ops.py'
+          s=open(p,'r',encoding='utf-8').read()
+          old="c=post(f'{account}/campaigns',name=campaign_name,objective='OUTCOME_SALES',status='PAUSED',special_ad_categories=[])"
+          new="c=post(f'{account}/campaigns',name=campaign_name,objective='OUTCOME_SALES',status='PAUSED',special_ad_categories=[],is_adset_budget_sharing_enabled=False)"
+          if old not in s: raise SystemExit('Campaign creation line not found for safe patch')
+          open('/tmp/meta_ops_run.py','w',encoding='utf-8').write(s.replace(old,new))
+          PY
+          python /tmp/meta_ops_run.py
