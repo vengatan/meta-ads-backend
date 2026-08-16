@@ -1,0 +1,18 @@
+name: Meta Bridge Probe
+on:
+  push:
+    paths:
+      - '.github/workflows/meta-bridge-probe.yml'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Meta bridge POST schema safely
+        run: |
+          set -e
+          echo 'POSTing empty JSON to discover required fields; no Meta object IDs supplied.'
+          curl -sS -i -X POST 'https://vensure-meta-ads-bridge.vercel.app/api/meta' \
+            -H 'Content-Type: application/json' \
+            --data '{}' | sed -E 's/(access_token|token)=[^&" ]+/\1=[REDACTED]/g'
