@@ -5,6 +5,7 @@ on:
       - '.github/workflows/meta-bridge-probe.yml'
   workflow_dispatch:
 
+# Safe no-op probe: no Meta object IDs are supplied.
 jobs:
   probe:
     runs-on: ubuntu-latest
