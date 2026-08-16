@@ -75,9 +75,9 @@ jobs:
           old_campaign="c=post(f'{account}/campaigns',name=campaign_name,objective='OUTCOME_SALES',status='PAUSED',special_ad_categories=[])"
           new_campaign="c=post(f'{account}/campaigns',name=campaign_name,objective='OUTCOME_SALES',status='PAUSED',special_ad_categories=[],is_adset_budget_sharing_enabled=False)"
           old_adset="                campaign_id=cid,\n                lifetime_budget=m['lifetime'],"
-          new_adset="                campaign_id=cid,\n                regional_regulated_categories=[{'SG':'SINGAPORE_UNIVERSAL','TW':'TAIWAN_UNIVERSAL'}[market]],\n                lifetime_budget=m['lifetime'],"
+          new_adset="                campaign_id=cid,\n                regional_regulated_categories=[{'SG':'SINGAPORE_UNIVERSAL','TW':'TAIWAN_UNIVERSAL'}[market]],\n                regional_regulation_identities=({'singapore_universal_beneficiary':'1642941823270224','singapore_universal_payer':'1642941823270224'} if market=='SG' else {'taiwan_universal_beneficiary':'181478856151491','taiwan_universal_payer':'181478856151491'}),\n                lifetime_budget=m['lifetime'],"
           if old_campaign not in s: raise SystemExit('Campaign creation line not found for safe patch')
-          if old_adset not in s: raise SystemExit('Adset creation block not found for regional compliance patch')
+          if old_adset not in s: raise SystemExit('Adset creation block not found for regional identity patch')
           s=s.replace(old_campaign,new_campaign).replace(old_adset,new_adset)
           open('/tmp/meta_ops_run.py','w',encoding='utf-8').write(s)
           PY
