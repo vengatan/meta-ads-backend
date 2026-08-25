@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+const crypto = require("node:crypto");
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -16,9 +16,9 @@ function expectedBridgeKey() {
 }
 
 function suppliedBridgeKey(req) {
-  const direct = req.headers?.["x-bridge-key"];
+  const direct = req.headers && req.headers["x-bridge-key"];
   if (typeof direct === "string" && direct) return direct;
-  const auth = req.headers?.authorization;
+  const auth = req.headers && req.headers.authorization;
   if (typeof auth === "string" && auth.startsWith("Bearer ")) return auth.slice(7);
   return "";
 }
@@ -66,25 +66,27 @@ async function parseJson(response) {
   try { return JSON.parse(text); } catch { return { raw: text }; }
 }
 
-async function graphGet(path, params = {}) {
+async function graphGet(path, params) {
   const qs = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null) qs.set(k, String(v));
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v !== undefined && v !== null) qs.set(k, String(v));
+  }
   qs.set("access_token", accessToken());
   const response = await fetch(`${GRAPH_BASE}/${path}?${qs.toString()}`);
   const data = await parseJson(response);
   if (!response.ok || data.error) {
-    throw Object.assign(new Error(data?.error?.message || `Meta GET failed (${response.status})`), {
+    throw Object.assign(new Error((data.error && data.error.message) || `Meta GET failed (${response.status})`), {
       status: response.status || 400,
-      meta: data?.error || data
+      meta: data.error || data
     });
   }
   return data;
 }
 
-async function graphPost(path, params = {}) {
+async function graphPost(path, params) {
   const body = new URLSearchParams();
   body.set("access_token", accessToken());
-  for (const [k, v] of Object.entries(params)) {
+  for (const [k, v] of Object.entries(params || {})) {
     if (v === undefined || v === null) continue;
     body.set(k, typeof v === "string" ? v : JSON.stringify(v));
   }
@@ -95,9 +97,9 @@ async function graphPost(path, params = {}) {
   });
   const data = await parseJson(response);
   if (!response.ok || data.error) {
-    throw Object.assign(new Error(data?.error?.message || `Meta POST failed (${response.status})`), {
+    throw Object.assign(new Error((data.error && data.error.message) || `Meta POST failed (${response.status})`), {
       status: response.status || 400,
-      meta: data?.error || data
+      meta: data.error || data
     });
   }
   return data;
@@ -124,12 +126,12 @@ function respondError(res, error) {
   });
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-robots-tag", "noindex");
   res.setHeader("referrer-policy", "no-referrer");
 
-  const queryOp = typeof req.query?.op === "string" ? req.query.op : "health";
+  const queryOp = req.query && typeof req.query.op === "string" ? req.query.op : "health";
 
   try {
     if (queryOp === "health") {
@@ -138,7 +140,8 @@ export default async function handler(req, res) {
         service: "meta-ads-backend-vercel",
         graphVersion: GRAPH_VERSION,
         writesConfigured: allowedAccounts().size > 0,
-        authenticationRequired: true
+        authenticationRequired: true,
+        runtime: "node-cjs"
       });
     }
 
@@ -155,10 +158,7 @@ export default async function handler(req, res) {
     if (MUTATIONS.has(queryOp) && req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "Mutation operations require POST" });
     }
-
-    if (req.method !== "POST") {
-      return res.status(405).json({ ok: false, error: "Method not allowed" });
-    }
+    if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
     const input = req.body && typeof req.body === "object" ? req.body : {};
     const op = typeof input.op === "string" ? input.op : queryOp;
@@ -169,9 +169,7 @@ export default async function handler(req, res) {
       const objectStorySpec = input.object_story_spec
         ? (typeof input.object_story_spec === "string" ? JSON.parse(input.object_story_spec) : input.object_story_spec)
         : undefined;
-      if (!input.object_story_id && !objectStorySpec) {
-        return res.status(400).json({ ok: false, error: "Provide object_story_id or object_story_spec" });
-      }
+      if (!input.object_story_id && !objectStorySpec) return res.status(400).json({ ok: false, error: "Provide object_story_id or object_story_spec" });
       const data = await graphPost(`${accountId}/adcreatives`, {
         name: input.name || `GPT replacement creative ${new Date().toISOString()}`,
         ...(input.object_story_id ? { object_story_id: input.object_story_id } : {}),
@@ -216,4 +214,4 @@ export default async function handler(req, res) {
   } catch (error) {
     return respondError(res, error);
   }
-}
+};
