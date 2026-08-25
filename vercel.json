@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron-repair-sg",
-      "schedule": "50 19 * * *"
+      "schedule": "0 20 * * *"
     }
   ]
 }
