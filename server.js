@@ -44,6 +44,22 @@ function requireRepairAuth(req) {
   if (!safeEqual(req.query?.k, repairKey())) throw Object.assign(new Error("Not found"), { status: 404 });
 }
 
+function requireCronAuth(req) {
+  const configuredSecret = process.env.CRON_SECRET;
+  const authorization = req.get("authorization") || "";
+  if (configuredSecret) {
+    if (!safeEqual(authorization, `Bearer ${configuredSecret}`)) {
+      throw Object.assign(new Error("Unauthorized"), { status: 401 });
+    }
+    return;
+  }
+
+  const userAgent = req.get("user-agent") || "";
+  if (!/^vercel-cron\//i.test(userAgent)) {
+    throw Object.assign(new Error("Not found"), { status: 404 });
+  }
+}
+
 function suppliedBridgeKey(req) {
   const direct = req.get("x-bridge-key");
   if (direct) return direct;
@@ -119,16 +135,35 @@ async function requireAllowedObject(objectId) {
 }
 
 function sendError(res, error) {
+  console.error("meta-ads-backend error", {
+    message: error?.message,
+    status: error?.status,
+    metaCode: error?.meta?.code,
+    metaSubcode: error?.meta?.error_subcode
+  });
   return res.status(error.status || 500).json({ ok: false, error: error.message, ...(error.meta ? { meta: error.meta } : {}) });
+}
+
+async function listRepairAds() {
+  const results = [];
+  for (const [adsetId, name] of REPAIR_ADSETS) {
+    const existing = await graphGet(`${adsetId}/ads`, { fields: "id,name,status,effective_status,creative,issues_info", limit: 100 });
+    const found = (existing.data || []).find((ad) => ad.name === name) || null;
+    results.push({ adset_id: adsetId, expected_name: name, ad: found });
+  }
+  return results;
 }
 
 async function findOrCreateRepairAds() {
   requireAllowedAccount(ACCOUNT_ID);
-  await graphGet(CONTROL_CREATIVE_ID, { fields: "id,name" });
-  const results = [];
+  const controlCreative = await graphGet(CONTROL_CREATIVE_ID, { fields: "id,name" });
+  if (String(controlCreative.id || "") !== CONTROL_CREATIVE_ID) {
+    throw Object.assign(new Error("Control creative validation failed"), { status: 409 });
+  }
 
+  const results = [];
   for (const [adsetId, name] of REPAIR_ADSETS) {
-    const existing = await graphGet(`${adsetId}/ads`, { fields: "id,name,status,effective_status,creative", limit: 100 });
+    const existing = await graphGet(`${adsetId}/ads`, { fields: "id,name,status,effective_status,creative,issues_info", limit: 100 });
     const found = (existing.data || []).find((ad) => ad.name === name);
     if (found) {
       results.push({ adset_id: adsetId, existing: true, ...found });
@@ -143,8 +178,34 @@ async function findOrCreateRepairAds() {
     });
     results.push({ adset_id: adsetId, existing: false, ad_id: created.id, status: "PAUSED" });
   }
-
   return results;
+}
+
+async function ensureRepairAdsActive() {
+  await findOrCreateRepairAds();
+  const current = await listRepairAds();
+  const changed = [];
+
+  for (const row of current) {
+    const ad = row.ad;
+    if (!ad) throw Object.assign(new Error(`Replacement ad missing for ${row.adset_id}`), { status: 409 });
+    if (String(ad.creative?.id || "") !== CONTROL_CREATIVE_ID) {
+      throw Object.assign(new Error(`Unexpected creative on replacement ad ${ad.id}`), { status: 409 });
+    }
+    if (ad.status !== "ACTIVE") {
+      await graphPost(ad.id, { status: "ACTIVE" });
+    }
+    changed.push({
+      adset_id: row.adset_id,
+      ad_id: ad.id,
+      previous_status: ad.status,
+      previous_effective_status: ad.effective_status,
+      requested_status: "ACTIVE",
+      creative_id: ad.creative?.id
+    });
+  }
+
+  return changed;
 }
 
 app.get(["/", "/api/ping"], (req, res) => {
@@ -215,17 +276,29 @@ app.get("/api/repair-sg-lab/activate", async (req, res) => {
   res.set("cache-control", "no-store");
   try {
     requireRepairAuth(req);
-    requireAllowedAccount(ACCOUNT_ID);
-    const changed = [];
-    for (const [adsetId, name] of REPAIR_ADSETS) {
-      const existing = await graphGet(`${adsetId}/ads`, { fields: "id,name,status,effective_status,creative", limit: 100 });
-      const ad = (existing.data || []).find((row) => row.name === name);
-      if (!ad) throw Object.assign(new Error(`Replacement ad missing for ${adsetId}`), { status: 409 });
-      if (String(ad.creative?.id || "") !== CONTROL_CREATIVE_ID) throw Object.assign(new Error(`Unexpected creative on ${ad.id}`), { status: 409 });
-      if (ad.status !== "ACTIVE") await graphPost(ad.id, { status: "ACTIVE" });
-      changed.push({ adset_id: adsetId, ad_id: ad.id, previous_status: ad.status, requested_status: "ACTIVE" });
-    }
+    const changed = await ensureRepairAdsActive();
     return res.status(200).json({ ok: true, changed });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+app.get("/api/cron-repair-sg", async (req, res) => {
+  res.set("cache-control", "no-store");
+  try {
+    requireCronAuth(req);
+    const changed = await ensureRepairAdsActive();
+    const current = await listRepairAds();
+    console.log("SG Meta lab cron repair completed", {
+      ads: current.map((row) => ({
+        adset_id: row.adset_id,
+        ad_id: row.ad?.id,
+        status: row.ad?.status,
+        effective_status: row.ad?.effective_status,
+        creative_id: row.ad?.creative?.id
+      }))
+    });
+    return res.status(200).json({ ok: true, changed, current });
   } catch (error) {
     return sendError(res, error);
   }
