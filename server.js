@@ -124,15 +124,12 @@ app.get("/insights", async (req, res) => {
   try {
     const accountId = normalizeAccountId(req.query.account_id);
     if (!accountId) return res.status(400).json({ error: "Missing account_id" });
-
     const params = {
       fields: req.query.fields || "campaign_name,adset_name,spend,impressions,clicks,ctr,cpc",
       date_preset: req.query.date_preset || "last_7d"
     };
     if (req.query.level) params.level = req.query.level;
-
-    const data = await graphGet(`${accountId}/insights`, params);
-    res.json(data);
+    res.json(await graphGet(`${accountId}/insights`, params));
   } catch (err) {
     sendError(res, err);
   }
@@ -150,8 +147,6 @@ app.get("/permissions", async (req, res) => {
   }
 });
 
-// Create a new immutable AdCreative. Prefer object_story_id when reusing an approved post;
-// otherwise pass a complete object_story_spec. New creatives are not activated by this endpoint.
 app.post("/creative", async (req, res) => {
   try {
     const accountId = requireAllowedAccount(req.body.account_id);
@@ -159,7 +154,6 @@ app.post("/creative", async (req, res) => {
     if (!object_story_id && !object_story_spec) {
       return res.status(400).json({ ok: false, error: "Provide object_story_id or object_story_spec" });
     }
-
     const data = await graphPost(`${accountId}/adcreatives`, {
       name: name || `GPT replacement creative ${new Date().toISOString()}`,
       ...(object_story_id ? { object_story_id } : {}),
@@ -172,7 +166,6 @@ app.post("/creative", async (req, res) => {
   }
 });
 
-// Create an ad PAUSED by default so Meta can review it before delivery.
 app.post("/ad", async (req, res) => {
   try {
     const accountId = requireAllowedAccount(req.body.account_id);
@@ -180,12 +173,10 @@ app.post("/ad", async (req, res) => {
     if (!adset_id || !creative_id) {
       return res.status(400).json({ ok: false, error: "Missing adset_id or creative_id" });
     }
-
     const adsetAccount = await accountForObject(adset_id);
     if (adsetAccount !== accountId) {
       return res.status(400).json({ ok: false, error: "Ad set does not belong to account_id" });
     }
-
     const data = await graphPost(`${accountId}/ads`, {
       name: name || `GPT replacement ad ${new Date().toISOString()}`,
       adset_id: String(adset_id),
@@ -198,7 +189,6 @@ app.post("/ad", async (req, res) => {
   }
 });
 
-// Swap the immutable creative reference on an existing ad. The ad remains in its current status.
 app.post("/ad/:adId/creative", async (req, res) => {
   try {
     const { adId } = req.params;
@@ -207,10 +197,7 @@ app.post("/ad/:adId/creative", async (req, res) => {
     if (!creativeId || !/^\d+$/.test(String(creativeId))) {
       return res.status(400).json({ ok: false, error: "Invalid creative_id" });
     }
-
-    const data = await graphPost(String(adId), {
-      creative: { creative_id: String(creativeId) }
-    });
+    const data = await graphPost(String(adId), { creative: { creative_id: String(creativeId) } });
     res.json({ ok: true, ad_id: adId, meta: data });
   } catch (err) {
     sendError(res, err);
@@ -225,7 +212,6 @@ app.post("/ad/:adId/status", async (req, res) => {
     if (!["ACTIVE", "PAUSED"].includes(status)) {
       return res.status(400).json({ ok: false, error: "status must be ACTIVE or PAUSED" });
     }
-
     const data = await graphPost(String(adId), { status });
     res.json({ ok: true, ad_id: adId, status, meta: data });
   } catch (err) {
@@ -234,10 +220,12 @@ app.post("/ad/:adId/status", async (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("Meta Ads API is running");
+  res.json({ ok: true, service: "meta-ads-backend", vercel: Boolean(process.env.VERCEL) });
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+// Vercel invokes the exported app as a Serverless Function. Only start a listener locally.
+export default app;
+if (!process.env.VERCEL) {
+  const port = process.env.PORT || 3000;
+  app.listen(port, () => console.log(`Server running on port ${port}`));
+}
