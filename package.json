@@ -1,12 +1,9 @@
 {
   "name": "meta-ads-backend",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "engines": {
     "node": "24.x"
-  },
-  "dependencies": {
-    "express": "^5.1.0"
   }
 }
