@@ -37,7 +37,11 @@ async function graphPost(path, params = {}) {
   for (const [k,v] of Object.entries(params)) body.set(k, typeof v === "string" ? v : JSON.stringify(v));
   const r = await fetch(`${GRAPH_BASE}/${path}`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
   const d = await parse(r);
-  if (!r.ok || d.error) throw new Error(JSON.stringify(d.error || d));
+  if (!r.ok || d.error) {
+    const err = new Error(JSON.stringify(d.error || d));
+    err.meta = d.error || d;
+    throw err;
+  }
   return d;
 }
 
@@ -46,6 +50,12 @@ export default async function handler(req, res) {
   res.setHeader("x-robots-tag", "noindex");
   if (!safeEqual(req.query && req.query.k, ONE_TIME_KEY)) return res.status(404).json({ ok:false });
   if (!process.env.META_ACCESS_TOKEN) return res.status(503).json({ ok:false, error:"META_ACCESS_TOKEN missing" });
+
+  let appInfo = null;
+  try {
+    const debug = await graphGet("debug_token", { input_token: process.env.META_ACCESS_TOKEN });
+    appInfo = debug && debug.data ? { app_id: debug.data.app_id, user_id: debug.data.user_id, is_valid: debug.data.is_valid, scopes: debug.data.scopes } : null;
+  } catch {}
 
   try {
     const story = {
@@ -80,8 +90,8 @@ export default async function handler(req, res) {
       created.push({ adset_id: adsetId, ad_id: ad.id, status: "PAUSED" });
     }
 
-    return res.status(200).json({ ok:true, creative_id: creative.id, ads: created });
+    return res.status(200).json({ ok:true, app:appInfo, creative_id: creative.id, ads: created });
   } catch (e) {
-    return res.status(500).json({ ok:false, error:e.message });
+    return res.status(500).json({ ok:false, app:appInfo, error:e.message, meta:e.meta || null });
   }
 }
