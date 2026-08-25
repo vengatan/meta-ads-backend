@@ -1,6 +1,6 @@
-const express = require("express");
-const metaHandler = require("./api/meta");
-const pingHandler = require("./api/ping");
+import express from "express";
+import metaHandler from "./api/meta.js";
+import pingHandler from "./api/ping.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -15,9 +15,9 @@ app.get("/", (req, res) => {
 app.all("/api/meta", metaHandler);
 app.all("/api/ping", pingHandler);
 
-module.exports = app;
+export default app;
 
-if (require.main === module) {
+if (!process.env.VERCEL) {
   const port = Number(process.env.PORT || 3000);
   app.listen(port, () => console.log(`meta-ads-backend listening on ${port}`));
 }
