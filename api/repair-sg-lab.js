@@ -1,4 +1,4 @@
-const crypto = require("node:crypto");
+import crypto from "node:crypto";
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -41,7 +41,7 @@ async function graphPost(path, params = {}) {
   return d;
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-robots-tag", "noindex");
   if (!safeEqual(req.query && req.query.k, ONE_TIME_KEY)) return res.status(404).json({ ok:false });
@@ -84,4 +84,4 @@ module.exports = async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ ok:false, error:e.message });
   }
-};
+}
