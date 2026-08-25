@@ -1,10 +1,40 @@
+import crypto from "node:crypto";
+
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const MUTATIONS = new Set(["create_creative", "create_ad", "swap_ad_creative", "set_ad_status"]);
 
 function accessToken() {
   const value = process.env.META_ACCESS_TOKEN;
   if (!value) throw Object.assign(new Error("META_ACCESS_TOKEN is not configured"), { status: 503 });
   return value;
+}
+
+function expectedBridgeKey() {
+  if (process.env.META_BRIDGE_KEY) return process.env.META_BRIDGE_KEY;
+  return crypto.createHash("sha256").update(`vensure-meta-bridge:${accessToken()}`).digest("hex");
+}
+
+function suppliedBridgeKey(req) {
+  const direct = req.headers?.["x-bridge-key"];
+  if (typeof direct === "string" && direct) return direct;
+  const auth = req.headers?.authorization;
+  if (typeof auth === "string" && auth.startsWith("Bearer ")) return auth.slice(7);
+  return "";
+}
+
+function safeEqual(a, b) {
+  const aa = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
+}
+
+function requireBridgeAuth(req) {
+  const supplied = suppliedBridgeKey(req);
+  const expected = expectedBridgeKey();
+  if (!supplied || !safeEqual(supplied, expected)) {
+    throw Object.assign(new Error("Unauthorized"), { status: 401 });
+  }
 }
 
 function normalizeAccountId(value) {
@@ -43,11 +73,10 @@ async function graphGet(path, params = {}) {
   const response = await fetch(`${GRAPH_BASE}/${path}?${qs.toString()}`);
   const data = await parseJson(response);
   if (!response.ok || data.error) {
-    const error = Object.assign(new Error(data?.error?.message || `Meta GET failed (${response.status})`), {
+    throw Object.assign(new Error(data?.error?.message || `Meta GET failed (${response.status})`), {
       status: response.status || 400,
       meta: data?.error || data
     });
-    throw error;
   }
   return data;
 }
@@ -66,11 +95,10 @@ async function graphPost(path, params = {}) {
   });
   const data = await parseJson(response);
   if (!response.ok || data.error) {
-    const error = Object.assign(new Error(data?.error?.message || `Meta POST failed (${response.status})`), {
+    throw Object.assign(new Error(data?.error?.message || `Meta POST failed (${response.status})`), {
       status: response.status || 400,
       meta: data?.error || data
     });
-    throw error;
   }
   return data;
 }
@@ -88,12 +116,6 @@ async function requireAllowedObject(objectId) {
   return accountId;
 }
 
-function getInput(req) {
-  const q = req.query || {};
-  const b = req.body && typeof req.body === "object" ? req.body : {};
-  return { ...q, ...b };
-}
-
 function respondError(res, error) {
   return res.status(error.status || 500).json({
     ok: false,
@@ -105,27 +127,42 @@ function respondError(res, error) {
 export default async function handler(req, res) {
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-robots-tag", "noindex");
-  const input = getInput(req);
-  const op = input.op || "health";
+  res.setHeader("referrer-policy", "no-referrer");
+
+  const queryOp = typeof req.query?.op === "string" ? req.query.op : "health";
 
   try {
-    if (op === "health") {
+    if (queryOp === "health") {
       return res.status(200).json({
         ok: true,
         service: "meta-ads-backend-vercel",
         graphVersion: GRAPH_VERSION,
-        writesEnabled: allowedAccounts().size > 0,
-        operations: ["permissions", "create_creative", "create_ad", "swap_ad_creative", "set_ad_status"]
+        writesConfigured: allowedAccounts().size > 0,
+        authenticationRequired: true
       });
     }
 
-    if (op === "permissions") {
+    requireBridgeAuth(req);
+
+    if (req.method === "GET" && queryOp === "permissions") {
       const [me, permissions] = await Promise.all([
         graphGet("me", { fields: "id,name" }),
         graphGet("me/permissions")
       ]);
       return res.status(200).json({ ok: true, me, permissions: permissions.data || [] });
     }
+
+    if (MUTATIONS.has(queryOp) && req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "Mutation operations require POST" });
+    }
+
+    if (req.method !== "POST") {
+      return res.status(405).json({ ok: false, error: "Method not allowed" });
+    }
+
+    const input = req.body && typeof req.body === "object" ? req.body : {};
+    const op = typeof input.op === "string" ? input.op : queryOp;
+    if (op !== queryOp) return res.status(400).json({ ok: false, error: "Operation mismatch" });
 
     if (op === "create_creative") {
       const accountId = requireAllowedAccount(input.account_id);
@@ -153,9 +190,9 @@ export default async function handler(req, res) {
         name: input.name || `GPT replacement ad ${new Date().toISOString()}`,
         adset_id: String(input.adset_id),
         creative: { creative_id: String(input.creative_id) },
-        status: String(input.status || "PAUSED").toUpperCase() === "ACTIVE" ? "ACTIVE" : "PAUSED"
+        status: "PAUSED"
       });
-      return res.status(200).json({ ok: true, ad_id: data.id });
+      return res.status(200).json({ ok: true, ad_id: data.id, status: "PAUSED" });
     }
 
     if (op === "swap_ad_creative") {
