@@ -1,4 +1,4 @@
-const crypto = require("node:crypto");
+import crypto from "node:crypto";
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -126,7 +126,7 @@ function respondError(res, error) {
   });
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader("cache-control", "no-store");
   res.setHeader("x-robots-tag", "noindex");
   res.setHeader("referrer-policy", "no-referrer");
@@ -141,7 +141,7 @@ module.exports = async function handler(req, res) {
         graphVersion: GRAPH_VERSION,
         writesConfigured: allowedAccounts().size > 0,
         authenticationRequired: true,
-        runtime: "node-cjs"
+        runtime: "node-esm"
       });
     }
 
@@ -214,4 +214,4 @@ module.exports = async function handler(req, res) {
   } catch (error) {
     return respondError(res, error);
   }
-};
+}
