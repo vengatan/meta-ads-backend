@@ -9,11 +9,11 @@ app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const ACCOUNT_ID = "act_239740063602735";
-const CONTROL_CREATIVE_ID = "1677420986472049";
+const CONTROL_CREATIVE_ID = "23851859866720178";
 const REPAIR_ADSETS = [
-  ["120247819803730179", "SG Profile Nightlife-EDM | Control repair 2026-08-26"],
-  ["120247819803050179", "SG Profile Dining-Cafe | Control repair 2026-08-26"],
-  ["120247819801930179", "SG Profile Tech-Finance | Control repair 2026-08-26"]
+  ["120247819803730179", "SG Profile Nightlife-EDM | Public control repair v2 2026-08-26"],
+  ["120247819803050179", "SG Profile Dining-Cafe | Public control repair v2 2026-08-26"],
+  ["120247819801930179", "SG Profile Tech-Finance | Public control repair v2 2026-08-26"]
 ];
 
 function accessToken() {
@@ -156,7 +156,7 @@ async function listRepairAds() {
 
 async function findOrCreateRepairAds() {
   requireAllowedAccount(ACCOUNT_ID);
-  const controlCreative = await graphGet(CONTROL_CREATIVE_ID, { fields: "id,name" });
+  const controlCreative = await graphGet(CONTROL_CREATIVE_ID, { fields: "id,name,effective_object_story_id" });
   if (String(controlCreative.id || "") !== CONTROL_CREATIVE_ID) {
     throw Object.assign(new Error("Control creative validation failed"), { status: 409 });
   }
