@@ -8,7 +8,7 @@ const PAGE_ID = "1739278202817541";
 const IG_ID = "17841407274095257";
 const DESTINATION = "https://prepsingapore.com/";
 const SOURCE_IMAGE = "https://scontent-ams2-1.xx.fbcdn.net/v/t45.1600-4/567148251_25479897271611786_3815264377948223173_n.jpg?_nc_cat=111&ccb=1-7&_nc_sid=d5bd00&_nc_ohc=GicivGzRltoQ7kNvwFzbez-&_nc_oc=AdozZ6mhk3sRn-kn4YN6w2aUGemT8dwP71fBbm99EyECGmL2GKyLPwkebsEA3FshNL4&_nc_zt=1&_nc_ht=scontent-ams2-1.xx&edm=AJcBmwoEAAAA&_nc_gid=MU4VMEvawj6MN1z-ZFPOBg&_nc_tpa=Q5bMBQKxzxdaY3BRjLgs20uESPqgiAAlRbJ7lPrsCEV2qR1G_8hNhy7Mjgiz11YiqHGUfOH2fC3Idlydpg&oh=00_AQHm5-4jr3OyR0xa_PrbqxSBk890Kt77xb239pemvP3kZQ&oe=6A97AF9E";
-const PREFIX = "SG Native Placement 2026-08-29";
+const PREFIX = "SG Native Placement v2 2026-08-29";
 const BODY = "We help Singaporeans who want to protect themselves from HIV with affordable PrEP access through doctors in Asia. Get PrEP now: register and place an order on prepsingapore.com, visit your preferred clinic after payment, and become PrEPed.";
 const ADSETS = [
   ["120247819801930179", `${PREFIX} | Tech-Finance`],
@@ -41,52 +41,54 @@ async function graphPost(path, params = {}) {
   return d;
 }
 
-function svgFeed() {
-  return Buffer.from(`<svg width="1080" height="1350" xmlns="http://www.w3.org/2000/svg">
-    <rect x="55" y="55" width="970" height="185" rx="30" fill="rgba(255,255,255,0.94)"/>
-    <text x="95" y="135" font-family="Arial,Helvetica,sans-serif" font-size="62" font-weight="700" fill="#d41f2f">PrEP Singapore</text>
-    <text x="95" y="198" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="500" fill="#191919">Be PrEPared for the good times</text>
-    <rect x="55" y="895" width="970" height="395" rx="30" fill="rgba(255,255,255,0.95)"/>
-    <text x="95" y="990" font-family="Arial,Helvetica,sans-serif" font-size="55" font-weight="700" fill="#191919">Affordable PrEP access</text>
-    <text x="95" y="1055" font-family="Arial,Helvetica,sans-serif" font-size="38" fill="#333333">through doctors in Asia</text>
-    <text x="95" y="1125" font-family="Arial,Helvetica,sans-serif" font-size="32" fill="#333333">Order online  •  Visit a clinic  •  Become PrEPed</text>
-    <rect x="95" y="1170" width="660" height="82" rx="18" fill="#d41f2f"/>
-    <text x="125" y="1225" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" fill="white">prepsingapore.com</text>
-  </svg>`);
-}
-
-function svgVertical() {
-  return Buffer.from(`<svg width="1080" height="1920" xmlns="http://www.w3.org/2000/svg">
-    <rect x="60" y="90" width="960" height="250" rx="34" fill="rgba(255,255,255,0.94)"/>
-    <text x="105" y="185" font-family="Arial,Helvetica,sans-serif" font-size="76" font-weight="700" fill="#d41f2f">PrEP Singapore</text>
-    <text x="105" y="275" font-family="Arial,Helvetica,sans-serif" font-size="47" font-weight="500" fill="#191919">Be PrEPared for the good times</text>
-    <rect x="60" y="1030" width="960" height="720" rx="34" fill="rgba(255,255,255,0.96)"/>
-    <text x="105" y="1140" font-family="Arial,Helvetica,sans-serif" font-size="64" font-weight="700" fill="#191919">Affordable PrEP access</text>
-    <text x="105" y="1215" font-family="Arial,Helvetica,sans-serif" font-size="43" fill="#333333">through doctors in Asia</text>
-    <text x="105" y="1325" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="600" fill="#222222">1  Order online</text>
-    <text x="105" y="1410" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="600" fill="#222222">2  Visit your preferred clinic</text>
-    <text x="105" y="1495" font-family="Arial,Helvetica,sans-serif" font-size="42" font-weight="600" fill="#222222">3  Become PrEPed</text>
-    <rect x="105" y="1570" width="760" height="105" rx="22" fill="#d41f2f"/>
-    <text x="145" y="1640" font-family="Arial,Helvetica,sans-serif" font-size="45" font-weight="700" fill="white">prepsingapore.com</text>
-  </svg>`);
+async function rounded(buffer, width, height, radius = 28) {
+  const mask = Buffer.from(`<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"><rect width="${width}" height="${height}" rx="${radius}" ry="${radius}" fill="white"/></svg>`);
+  return sharp(buffer).ensureAlpha().composite([{ input: mask, blend: "dest-in" }]).png().toBuffer();
 }
 
 async function buildVariants(source) {
-  const feedBg = await sharp(source).resize(1080, 1350, { fit: "cover" }).blur(35).modulate({ brightness: 0.66, saturation: 0.8 }).jpeg({ quality: 88 }).toBuffer();
-  const feedHero = await sharp(source).resize(1080, null, { fit: "inside", withoutEnlargement: false }).jpeg({ quality: 94 }).toBuffer();
+  const hero = await sharp(source).resize(1080, null, { fit: "inside", withoutEnlargement: false }).sharpen().jpeg({ quality: 95 }).toBuffer();
+  const heroMeta = await sharp(hero).metadata();
+
+  const titleRaw = await sharp(source)
+    .extract({ left: 245, top: 92, width: 365, height: 132 })
+    .resize({ width: 900, fit: "inside" })
+    .sharpen({ sigma: 1.1 })
+    .jpeg({ quality: 96, chromaSubsampling: "4:4:4" })
+    .toBuffer();
+  const titleMeta = await sharp(titleRaw).metadata();
+  const title = await rounded(titleRaw, titleMeta.width, titleMeta.height, 28);
+
+  const feedBg = await sharp(source)
+    .resize(1080, 1350, { fit: "cover" })
+    .blur(38)
+    .modulate({ brightness: 0.70, saturation: 0.72 })
+    .jpeg({ quality: 88 })
+    .toBuffer();
   const feed = await sharp(feedBg).composite([
-    { input: feedHero, left: 0, top: 280 },
-    { input: svgFeed(), left: 0, top: 0 }
-  ]).jpeg({ quality: 92, chromaSubsampling: "4:4:4" }).toBuffer();
+    { input: title, left: Math.round((1080 - titleMeta.width) / 2), top: 95 },
+    { input: hero, left: 0, top: 545 }
+  ]).jpeg({ quality: 93, chromaSubsampling: "4:4:4" }).toBuffer();
 
-  const verticalBg = await sharp(source).resize(1080, 1920, { fit: "cover" }).blur(42).modulate({ brightness: 0.63, saturation: 0.78 }).jpeg({ quality: 88 }).toBuffer();
-  const verticalHero = await sharp(source).resize(1080, null, { fit: "inside", withoutEnlargement: false }).jpeg({ quality: 94 }).toBuffer();
+  const verticalBg = await sharp(source)
+    .resize(1080, 1920, { fit: "cover" })
+    .blur(46)
+    .modulate({ brightness: 0.68, saturation: 0.70 })
+    .jpeg({ quality: 88 })
+    .toBuffer();
   const vertical = await sharp(verticalBg).composite([
-    { input: verticalHero, left: 0, top: 405 },
-    { input: svgVertical(), left: 0, top: 0 }
-  ]).jpeg({ quality: 92, chromaSubsampling: "4:4:4" }).toBuffer();
+    { input: title, left: Math.round((1080 - titleMeta.width) / 2), top: 180 },
+    { input: hero, left: 0, top: 610 }
+  ]).jpeg({ quality: 93, chromaSubsampling: "4:4:4" }).toBuffer();
 
-  return { feed, vertical };
+  return {
+    feed,
+    vertical,
+    source_main_width: heroMeta.width,
+    source_main_height: heroMeta.height,
+    title_width: titleMeta.width,
+    title_height: titleMeta.height
+  };
 }
 
 async function uploadImage(buffer, name) {
@@ -108,9 +110,9 @@ export default async function handler(req, res) {
       const srcResponse = await fetch(SOURCE_IMAGE);
       if (!srcResponse.ok) throw new Error(`Source image fetch failed: ${srcResponse.status}`);
       const source = Buffer.from(await srcResponse.arrayBuffer());
-      const { feed, vertical } = await buildVariants(source);
-      const feedImage = await uploadImage(feed, "sg-native-feed-1080x1350-20260829.jpg");
-      const verticalImage = await uploadImage(vertical, "sg-native-story-reels-1080x1920-20260829.jpg");
+      const variants = await buildVariants(source);
+      const feedImage = await uploadImage(variants.feed, "sg-native-v2-feed-1080x1350-20260829.jpg");
+      const verticalImage = await uploadImage(variants.vertical, "sg-native-v2-story-reels-1080x1920-20260829.jpg");
 
       const assetFeedSpec = {
         optimization_type: "PLACEMENT",
@@ -151,7 +153,7 @@ export default async function handler(req, res) {
       };
 
       const creative = await graphPost(`${ACCOUNT_ID}/adcreatives`, {
-        name: `${PREFIX} | 4x5 + 9x16`,
+        name: `${PREFIX} | 4x5 + 9x16 source-safe`,
         object_story_spec: { page_id: PAGE_ID, instagram_user_id: IG_ID },
         asset_feed_spec: assetFeedSpec
       });
@@ -178,6 +180,12 @@ export default async function handler(req, res) {
         creative_id: creative.id,
         feed_image: { hash: feedImage.hash, width: 1080, height: 1350 },
         vertical_image: { hash: verticalImage.hash, width: 1080, height: 1920 },
+        preserved_source: {
+          main_width: variants.source_main_width,
+          main_height: variants.source_main_height,
+          enlarged_title_width: variants.title_width,
+          enlarged_title_height: variants.title_height
+        },
         ads
       });
     }
