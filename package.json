@@ -1,16 +1,12 @@
 {
   "name": "meta-ads-backend",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "private": true,
   "type": "module",
   "engines": {
     "node": "24.x"
   },
-  "scripts": {
-    "postinstall": "node tools/sg-native-v2-once.mjs"
-  },
   "dependencies": {
-    "express": "^5.1.0",
-    "sharp": "^0.34.3"
+    "express": "^5.1.0"
   }
 }
