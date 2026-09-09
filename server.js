@@ -44,22 +44,6 @@ function requireRepairAuth(req) {
   if (!safeEqual(req.query?.k, repairKey())) throw Object.assign(new Error("Not found"), { status: 404 });
 }
 
-function requireCronAuth(req) {
-  const configuredSecret = process.env.CRON_SECRET;
-  const authorization = req.get("authorization") || "";
-  if (configuredSecret) {
-    if (!safeEqual(authorization, `Bearer ${configuredSecret}`)) {
-      throw Object.assign(new Error("Unauthorized"), { status: 401 });
-    }
-    return;
-  }
-
-  const userAgent = req.get("user-agent") || "";
-  if (!/^vercel-cron\//i.test(userAgent)) {
-    throw Object.assign(new Error("Not found"), { status: 404 });
-  }
-}
-
 function suppliedBridgeKey(req) {
   const direct = req.get("x-bridge-key");
   if (direct) return direct;
@@ -314,27 +298,6 @@ app.get("/api/repair-sg-lab/activate", async (req, res) => {
     requireRepairAuth(req);
     const changed = await ensureRepairAdsActive();
     return res.status(200).json({ ok: true, changed });
-  } catch (error) {
-    return sendError(res, error);
-  }
-});
-
-app.get("/api/cron-repair-sg", async (req, res) => {
-  res.set("cache-control", "no-store");
-  try {
-    requireCronAuth(req);
-    const changed = await ensureRepairAdsActive();
-    const current = await listRepairAds();
-    console.log("SG Meta lab cron repair completed", {
-      ads: current.map((row) => ({
-        adset_id: row.adset_id,
-        ad_id: row.ad?.id,
-        status: row.ad?.status,
-        effective_status: row.ad?.effective_status,
-        creative_id: row.ad?.creative?.id
-      }))
-    });
-    return res.status(200).json({ ok: true, changed, current });
   } catch (error) {
     return sendError(res, error);
   }
