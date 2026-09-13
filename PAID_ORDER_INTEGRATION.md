@@ -60,7 +60,11 @@ GA4_MEASUREMENT_ID=<GA4 measurement ID>
 GA4_API_SECRET=<GA4 Measurement Protocol secret>
 META_PIXEL_ID=<Meta dataset/pixel ID>
 META_ACCESS_TOKEN=<Meta Conversions API token>
+STAPE_META_CAPI_GATEWAY_URL=<exact HTTPS CAPI ingestion URL from Stape>
+STAPE_META_CAPI_GATEWAY_TOKEN=<optional Stape gateway bearer token>
 PAID_ORDER_EVENT_SOURCE_URL=https://preptaiwan.org/
 ```
+
+The backend sends Meta purchases only through `STAPE_META_CAPI_GATEWAY_URL`; it refuses a Meta Graph URL for this setting. Use the exact Stape-provided CAPI request URL—not the public Stape container-script URL—and provide its gateway token if the gateway requires one. The browser Pixel must also be routed to the matching Stape Meta CAPI Gateway so browser and server events can be deduplicated by `event_id`.
 
 GA4 receives the canonical `purchase` event. Google Ads should import that one verified GA4 purchase action as Primary; all duplicate purchase actions remain Secondary.

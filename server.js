@@ -77,6 +77,42 @@ function paidOrderWebhookSecret() {
   return value;
 }
 
+function stapeMetaCapiGatewayUrl() {
+  const raw = String(process.env.STAPE_META_CAPI_GATEWAY_URL || "").trim();
+  if (!raw) return "";
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw Object.assign(new Error("STAPE_META_CAPI_GATEWAY_URL must be an HTTPS URL"), { status: 503 });
+  }
+  if (url.protocol !== "https:" || /(^|\.)facebook\.com$/i.test(url.hostname)) {
+    throw Object.assign(new Error("STAPE_META_CAPI_GATEWAY_URL must point to the Stape gateway, not Meta Graph"), { status: 503 });
+  }
+  return url.toString();
+}
+
+async function postStapeMetaCapi(events) {
+  const gatewayUrl = stapeMetaCapiGatewayUrl();
+  if (!gatewayUrl) return null;
+  const gatewayToken = String(process.env.STAPE_META_CAPI_GATEWAY_TOKEN || "").trim();
+  const response = await fetch(gatewayUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(gatewayToken ? { authorization: `Bearer ${gatewayToken}` } : {})
+    },
+    // The gateway receives the standard Meta CAPI envelope. The access token
+    // remains server-side and is never sent to the browser or Zoho.
+    body: JSON.stringify({ data: events, access_token: accessToken() })
+  });
+  const data = await parseJson(response);
+  if (!response.ok || data.error) {
+    throw Object.assign(new Error(data?.error?.message || `Stape Meta CAPI delivery failed (${response.status})`), { status: 502, meta: data?.error || data });
+  }
+  return data;
+}
+
 function requirePaidOrderWebhookAuth(req) {
   const supplied = req.get("x-zoho-paid-order-secret") || suppliedBridgeKey(req);
   if (!safeEqual(supplied, paidOrderWebhookSecret())) throw Object.assign(new Error("Unauthorized"), { status: 401 });
@@ -151,9 +187,9 @@ async function sendPaidOrderConversions(order) {
   }
 
   const pixelId = process.env.META_PIXEL_ID;
-  if (pixelId && (order.fbp || order.fbc)) {
-    const data = await graphPost(`${pixelId}/events`, {
-      data: [{
+  const stapeGatewayUrl = stapeMetaCapiGatewayUrl();
+  if (pixelId && stapeGatewayUrl && (order.fbp || order.fbc)) {
+    const data = await postStapeMetaCapi([{
         event_name: "Purchase",
         event_time: Math.floor(Date.parse(order.paidAt) / 1000),
         event_id: order.eventId,
@@ -164,12 +200,11 @@ async function sendPaidOrderConversions(order) {
           ...(order.fbc ? { fbc: order.fbc } : {})
         },
         custom_data: { value: order.amount, currency: order.currency }
-      }]
-    });
+      }]);
     if (!data.events_received) throw Object.assign(new Error("Meta purchase delivery was not accepted"), { status: 502 });
     results.meta = "sent";
   } else {
-    results.meta = "skipped: META_PIXEL_ID or Meta browser/click ID is missing";
+    results.meta = "skipped: META_PIXEL_ID, STAPE_META_CAPI_GATEWAY_URL, or Meta browser/click ID is missing";
   }
 
   return { mode: "enabled", results };
