@@ -133,7 +133,13 @@ function parsePaidOrder(payload) {
   if (!/^\d+$/.test(organizationId) || !/^\d+$/.test(salesOrderId) || !responseOrderNumber || responseOrderNumber.length > 100) {
     throw Object.assign(new Error("organization_id, salesorder_id, and response_order_number are required"), { status: 400 });
   }
-  if (organizationId !== String(process.env.ZOHO_ORGANIZATION_ID || "")) {
+  const allowedZohoOrganizations = new Set(
+    String(process.env.ZOHO_ORGANIZATION_IDS || process.env.ZOHO_ORGANIZATION_ID || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  );
+  if (!allowedZohoOrganizations.has(organizationId)) {
     throw Object.assign(new Error("Zoho organization is not allowed"), { status: 403 });
   }
   if (paidStatus !== "paid") throw Object.assign(new Error("Sales Order is not paid"), { status: 409 });

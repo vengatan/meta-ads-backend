@@ -46,6 +46,22 @@ test("accepts a signed paid order without enabling delivery", async () => {
   assert.doesNotMatch(data.event_id, /6517/);
 });
 
+test("accepts a paid order from the second Zoho Books organization", async () => {
+  const prior = process.env.ZOHO_ORGANIZATION_IDS;
+  process.env.ZOHO_ORGANIZATION_IDS = "747696142,806878109";
+  try {
+    const response = await post(paidOrder({ organization_id: "806878109" }));
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.ok, true);
+    assert.equal(data.delivery.mode, "disabled");
+  } finally {
+    if (prior === undefined) delete process.env.ZOHO_ORGANIZATION_IDS;
+    else process.env.ZOHO_ORGANIZATION_IDS = prior;
+  }
+});
+
 test("rejects an unpaid sales order", async () => {
   const response = await post(paidOrder({ paid_status: "unpaid" }));
   const data = await response.json();

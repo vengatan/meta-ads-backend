@@ -5,7 +5,8 @@
 ## Required Vercel environment variables
 
 ```text
-ZOHO_ORGANIZATION_ID=747696142
+# Comma-separated Zoho Books organization IDs.
+ZOHO_ORGANIZATION_IDS=747696142,806878109
 ZOHO_PAID_ORDER_WEBHOOK_SECRET=<a-long-random-secret>
 PAID_CONVERSION_DELIVERY_ENABLED=false
 ```
@@ -35,7 +36,7 @@ x-zoho-paid-order-secret: <the-secret>
 }
 ```
 
-The endpoint rejects any status other than `paid`. `response_order_number` is the only attribution join key: it is the **Order Number in the Google response Sheet**, copied into Zoho's Sales Order **reference number**. It is not Zoho's `salesorder_number`. A Sheet row number must never be stored or used. Its event ID is derived from the organization and Zoho Sales Order ID, so it never exposes the response Order Number to an ad platform. During the short migration window, `reference_number` and `order_number` are accepted as backward-compatible aliases.
+The endpoint rejects any status other than `paid` and accepts only the Zoho Books organizations listed in `ZOHO_ORGANIZATION_IDS`. `response_order_number` is the only attribution join key: it is the **Order Number in the Google response Sheet**, copied into Zoho's Sales Order **reference number**. It is not Zoho's `salesorder_number`. A Sheet row number must never be stored or used. Its event ID is derived from the organization and Zoho Sales Order ID, so it never exposes the response Order Number to an ad platform. During the short migration window, `reference_number` and `order_number` are accepted as backward-compatible aliases.
 
 ## Zoho idempotency fields
 
