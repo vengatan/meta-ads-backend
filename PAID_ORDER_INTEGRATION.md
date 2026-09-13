@@ -37,6 +37,15 @@ x-zoho-paid-order-secret: <the-secret>
 
 The endpoint rejects any status other than `paid`. Its event ID is derived from the organization and Zoho Sales Order ID, so it never exposes the Sales Order reference to an ad platform.
 
+## Zoho idempotency fields
+
+The following non-PII Sales Order fields are configured in Zoho Books:
+
+- `cf_paid_conversion_dispatched` — checkbox; set to `true` only after the webhook returns success.
+- `cf_paid_conversion_event_id` — unique text field; store the endpoint's returned `event_id`.
+
+Use the Zoho workflow condition `paid_status = paid` and `cf_paid_conversion_dispatched = false`. After a successful callback, write the returned event ID and set the checkbox. This avoids retrying a paid order after a successful dispatch.
+
 ## Attribution prerequisites
 
 Zoho Sales Orders currently contain no web attribution fields. Before enabling delivery, add non-health custom fields for GA4 client ID, Meta browser ID (`fbp`), and Meta click ID (`fbc`), then capture them with user consent at lead creation. Do not transmit names, emails, prescriptions, clinic details, or other health-related information.
