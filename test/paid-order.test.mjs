@@ -62,6 +62,31 @@ test("requires the response Order Number attribution key", async () => {
   assert.equal(data.error, "organization_id, salesorder_id, and response_order_number are required");
 });
 
+test("refuses a direct Meta Graph endpoint when paid delivery is enabled", async () => {
+  const prior = {
+    enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED,
+    pixel: process.env.META_PIXEL_ID,
+    gateway: process.env.STAPE_META_CAPI_GATEWAY_URL
+  };
+  process.env.PAID_CONVERSION_DELIVERY_ENABLED = "true";
+  process.env.META_PIXEL_ID = "209850509573148";
+  process.env.STAPE_META_CAPI_GATEWAY_URL = "https://graph.facebook.com/v25.0/209850509573148/events";
+  try {
+    const response = await post(paidOrder({ fbp: "fb.1.1700000000.123456789" }));
+    const data = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(data.error, "STAPE_META_CAPI_GATEWAY_URL must point to the Stape gateway, not Meta Graph");
+  } finally {
+    if (prior.enabled === undefined) delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
+    else process.env.PAID_CONVERSION_DELIVERY_ENABLED = prior.enabled;
+    if (prior.pixel === undefined) delete process.env.META_PIXEL_ID;
+    else process.env.META_PIXEL_ID = prior.pixel;
+    if (prior.gateway === undefined) delete process.env.STAPE_META_CAPI_GATEWAY_URL;
+    else process.env.STAPE_META_CAPI_GATEWAY_URL = prior.gateway;
+  }
+});
+
 test("rejects an invalid webhook secret", async () => {
   const response = await post(paidOrder(), "wrong-secret");
   const data = await response.json();
