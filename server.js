@@ -71,6 +71,107 @@ function requireBridgeAuth(req) {
   if (!safeEqual(suppliedBridgeKey(req), bridgeKey())) throw Object.assign(new Error("Unauthorized"), { status: 401 });
 }
 
+function paidOrderWebhookSecret() {
+  const value = process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET;
+  if (!value) throw Object.assign(new Error("ZOHO_PAID_ORDER_WEBHOOK_SECRET is not configured"), { status: 503 });
+  return value;
+}
+
+function requirePaidOrderWebhookAuth(req) {
+  const supplied = req.get("x-zoho-paid-order-secret") || suppliedBridgeKey(req);
+  if (!safeEqual(supplied, paidOrderWebhookSecret())) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+}
+
+function parsePaidOrder(payload) {
+  const organizationId = String(payload?.organization_id || "").trim();
+  const salesOrderId = String(payload?.salesorder_id || "").trim();
+  const referenceNumber = String(payload?.reference_number || "").trim();
+  const paidStatus = String(payload?.paid_status || "").trim().toLowerCase();
+  const currency = String(payload?.currency || "").trim().toUpperCase();
+  const amount = Number(payload?.amount);
+  const paidAt = String(payload?.paid_at || "").trim();
+
+  if (!/^\d+$/.test(organizationId) || !/^\d+$/.test(salesOrderId) || !referenceNumber || referenceNumber.length > 100) {
+    throw Object.assign(new Error("organization_id, salesorder_id, and reference_number are required"), { status: 400 });
+  }
+  if (organizationId !== String(process.env.ZOHO_ORGANIZATION_ID || "")) {
+    throw Object.assign(new Error("Zoho organization is not allowed"), { status: 403 });
+  }
+  if (paidStatus !== "paid") throw Object.assign(new Error("Sales Order is not paid"), { status: 409 });
+  if (!Number.isFinite(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) {
+    throw Object.assign(new Error("amount must be positive and currency must be an ISO 4217 code"), { status: 400 });
+  }
+  if (paidAt && Number.isNaN(Date.parse(paidAt))) throw Object.assign(new Error("paid_at must be an ISO date-time when supplied"), { status: 400 });
+
+  const eventId = digest(`zoho-paid-order:${organizationId}:${salesOrderId}`);
+  return {
+    organizationId,
+    salesOrderId,
+    referenceNumber,
+    amount,
+    currency,
+    paidAt: paidAt || new Date().toISOString(),
+    eventId,
+    gaClientId: typeof payload?.ga_client_id === "string" ? payload.ga_client_id.trim() : "",
+    fbp: typeof payload?.fbp === "string" ? payload.fbp.trim() : "",
+    fbc: typeof payload?.fbc === "string" ? payload.fbc.trim() : ""
+  };
+}
+
+async function sendPaidOrderConversions(order) {
+  if (process.env.PAID_CONVERSION_DELIVERY_ENABLED !== "true") {
+    return { mode: "disabled", reason: "PAID_CONVERSION_DELIVERY_ENABLED is not true" };
+  }
+
+  const results = {};
+  if (process.env.GA4_MEASUREMENT_ID && process.env.GA4_API_SECRET && order.gaClientId) {
+    const response = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(process.env.GA4_MEASUREMENT_ID)}&api_secret=${encodeURIComponent(process.env.GA4_API_SECRET)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_id: order.gaClientId,
+        events: [{
+          name: "purchase",
+          params: {
+            transaction_id: order.eventId,
+            value: order.amount,
+            currency: order.currency,
+            engagement_time_msec: 1
+          }
+        }]
+      })
+    });
+    if (!response.ok) throw Object.assign(new Error(`GA4 purchase delivery failed (${response.status})`), { status: 502 });
+    results.ga4 = "sent";
+  } else {
+    results.ga4 = "skipped: GA4 credentials or ga_client_id are missing";
+  }
+
+  const pixelId = process.env.META_PIXEL_ID;
+  if (pixelId && (order.fbp || order.fbc)) {
+    const data = await graphPost(`${pixelId}/events`, {
+      data: [{
+        event_name: "Purchase",
+        event_time: Math.floor(Date.parse(order.paidAt) / 1000),
+        event_id: order.eventId,
+        action_source: "website",
+        event_source_url: process.env.PAID_ORDER_EVENT_SOURCE_URL || "https://preptaiwan.org/",
+        user_data: {
+          ...(order.fbp ? { fbp: order.fbp } : {}),
+          ...(order.fbc ? { fbc: order.fbc } : {})
+        },
+        custom_data: { value: order.amount, currency: order.currency }
+      }]
+    });
+    if (!data.events_received) throw Object.assign(new Error("Meta purchase delivery was not accepted"), { status: 502 });
+    results.meta = "sent";
+  } else {
+    results.meta = "skipped: META_PIXEL_ID or Meta browser/click ID is missing";
+  }
+
+  return { mode: "enabled", results };
+}
+
 function normalizeAccountId(value) {
   if (!value) return null;
   const raw = String(value).trim();
@@ -306,6 +407,24 @@ app.get("/api/insights", async (req, res) => {
       data: insights.data || [],
       has_more: Boolean(insights.paging?.next)
     });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+app.post("/api/zoho/paid-order", async (req, res) => {
+  res.set("cache-control", "no-store");
+  try {
+    requirePaidOrderWebhookAuth(req);
+    const order = parsePaidOrder(req.body);
+    const delivery = await sendPaidOrderConversions(order);
+    console.log("Zoho paid-order conversion processed", {
+      salesOrderId: order.salesOrderId,
+      referenceNumber: order.referenceNumber,
+      eventId: order.eventId,
+      deliveryMode: delivery.mode
+    });
+    return res.status(200).json({ ok: true, event_id: order.eventId, delivery });
   } catch (error) {
     return sendError(res, error);
   }
