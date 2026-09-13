@@ -24,7 +24,7 @@ x-zoho-paid-order-secret: <the-secret>
 {
   "organization_id": "747696142",
   "salesorder_id": "<Zoho Sales Order ID>",
-  "reference_number": "<Zoho Sales Order reference>",
+  "response_order_number": "<Order Number from the Google response Sheet>",
   "paid_status": "paid",
   "amount": 378.4,
   "currency": "SGD",
@@ -35,7 +35,7 @@ x-zoho-paid-order-secret: <the-secret>
 }
 ```
 
-The endpoint rejects any status other than `paid`. Its event ID is derived from the organization and Zoho Sales Order ID, so it never exposes the Sales Order reference to an ad platform.
+The endpoint rejects any status other than `paid`. `response_order_number` is the only attribution join key: it is the **Order Number in the Google response Sheet**, copied into Zoho's Sales Order **reference number**. It is not Zoho's `salesorder_number`. A Sheet row number must never be stored or used. Its event ID is derived from the organization and Zoho Sales Order ID, so it never exposes the response Order Number to an ad platform. During the short migration window, `reference_number` and `order_number` are accepted as backward-compatible aliases.
 
 ## Zoho idempotency fields
 
@@ -48,7 +48,7 @@ Zoho Books Sales Order workflows do not expose `paid_status` as a rule criterion
 
 ## Attribution prerequisites
 
-Zoho Sales Orders currently contain no web attribution fields. Before enabling delivery, add non-health custom fields for GA4 client ID, Meta browser ID (`fbp`), and Meta click ID (`fbc`), then capture them with user consent at lead creation. The current public Google Form has no such fields, and its editor is not available through the connected Drive account. Do not enable delivery until the form/data-capture design is approved and those values can reach Zoho. Do not transmit names, emails, prescriptions, clinic details, or other health-related information.
+Store attribution in a dedicated response-Sheet tab keyed by `response_order_number`, with one record per Google response Order Number. Before enabling delivery, populate that record with consented non-health values: GA4 client ID, Meta browser ID (`fbp`), Meta click ID (`fbc`), Google click ID (`gclid`), UTM values, and referrer. The paid-order function must look up attribution by `response_order_number`, never by a Sheet row number or Zoho Sales Order Number, then pass only GA4/Meta identifiers to this endpoint. Do not transmit names, emails, prescriptions, clinic details, or other health-related information.
 
 ## Enable delivery
 

@@ -85,14 +85,17 @@ function requirePaidOrderWebhookAuth(req) {
 function parsePaidOrder(payload) {
   const organizationId = String(payload?.organization_id || "").trim();
   const salesOrderId = String(payload?.salesorder_id || "").trim();
-  const referenceNumber = String(payload?.reference_number || "").trim();
+  // `response_order_number` is the sole attribution join key. It is the
+  // Google response Sheet's Order Number, not Zoho's salesorder_number.
+  // The aliases keep the existing Zoho function working during migration.
+  const responseOrderNumber = String(payload?.response_order_number || payload?.reference_number || payload?.order_number || "").trim();
   const paidStatus = String(payload?.paid_status || "").trim().toLowerCase();
   const currency = String(payload?.currency || "").trim().toUpperCase();
   const amount = Number(payload?.amount);
   const paidAt = String(payload?.paid_at || "").trim();
 
-  if (!/^\d+$/.test(organizationId) || !/^\d+$/.test(salesOrderId) || !referenceNumber || referenceNumber.length > 100) {
-    throw Object.assign(new Error("organization_id, salesorder_id, and reference_number are required"), { status: 400 });
+  if (!/^\d+$/.test(organizationId) || !/^\d+$/.test(salesOrderId) || !responseOrderNumber || responseOrderNumber.length > 100) {
+    throw Object.assign(new Error("organization_id, salesorder_id, and response_order_number are required"), { status: 400 });
   }
   if (organizationId !== String(process.env.ZOHO_ORGANIZATION_ID || "")) {
     throw Object.assign(new Error("Zoho organization is not allowed"), { status: 403 });
@@ -107,7 +110,7 @@ function parsePaidOrder(payload) {
   return {
     organizationId,
     salesOrderId,
-    referenceNumber,
+    responseOrderNumber,
     amount,
     currency,
     paidAt: paidAt || new Date().toISOString(),
@@ -420,7 +423,7 @@ app.post("/api/zoho/paid-order", async (req, res) => {
     const delivery = await sendPaidOrderConversions(order);
     console.log("Zoho paid-order conversion processed", {
       salesOrderId: order.salesOrderId,
-      referenceNumber: order.referenceNumber,
+      responseOrderNumber: order.responseOrderNumber,
       eventId: order.eventId,
       deliveryMode: delivery.mode
     });

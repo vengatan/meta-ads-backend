@@ -15,7 +15,7 @@ function paidOrder(overrides = {}) {
   return {
     organization_id: "747696142",
     salesorder_id: "2637982000045158007",
-    reference_number: "6517",
+    response_order_number: "6517",
     paid_status: "paid",
     amount: 374,
     currency: "SGD",
@@ -52,6 +52,14 @@ test("rejects an unpaid sales order", async () => {
 
   assert.equal(response.status, 409);
   assert.equal(data.error, "Sales Order is not paid");
+});
+
+test("requires the response Order Number attribution key", async () => {
+  const response = await post(paidOrder({ response_order_number: "" }));
+  const data = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(data.error, "organization_id, salesorder_id, and response_order_number are required");
 });
 
 test("rejects an invalid webhook secret", async () => {
