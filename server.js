@@ -267,6 +267,50 @@ app.get("/api/meta", async (req, res) => {
   }
 });
 
+
+app.get("/api/insights", async (req, res) => {
+  // Vercel Deployment Protection requires a signed-in Vercel team member before this function runs.
+  res.set("cache-control", "no-store");
+  try {
+    const accountId = requireAllowedAccount(req.query.account_id || ACCOUNT_ID);
+    const level = typeof req.query.level === "string" ? req.query.level : "campaign";
+    if (!["campaign", "adset", "ad"].includes(level)) {
+      return res.status(400).json({ ok: false, error: "level must be campaign, adset, or ad" });
+    }
+
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    const today = new Date();
+    const defaultUntil = today.toISOString().slice(0, 10);
+    const defaultSince = new Date(today.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const since = typeof req.query.since === "string" ? req.query.since : defaultSince;
+    const until = typeof req.query.until === "string" ? req.query.until : defaultUntil;
+    if (!datePattern.test(since) || !datePattern.test(until) || Number.isNaN(Date.parse(`${since}T00:00:00Z`)) || Number.isNaN(Date.parse(`${until}T00:00:00Z`))) {
+      return res.status(400).json({ ok: false, error: "since and until must be valid YYYY-MM-DD dates" });
+    }
+    const elapsedDays = (Date.parse(`${until}T00:00:00Z`) - Date.parse(`${since}T00:00:00Z`)) / 86400000;
+    if (elapsedDays < 0 || elapsedDays > 92) {
+      return res.status(400).json({ ok: false, error: "Date range must be between 0 and 92 days" });
+    }
+
+    const insights = await graphGet(`${accountId}/insights`, {
+      fields: "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,ctr,cpc,cpm,frequency,actions,action_values,cost_per_action_type",
+      level,
+      time_range: JSON.stringify({ since, until }),
+      limit: 100
+    });
+    return res.status(200).json({
+      ok: true,
+      account_id: accountId,
+      level,
+      date_range: { since, until },
+      data: insights.data || [],
+      has_more: Boolean(insights.paging?.next)
+    });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
 app.post("/api/meta", async (req, res) => {
   res.set("cache-control", "no-store");
   try {
