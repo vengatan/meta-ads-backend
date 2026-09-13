@@ -44,11 +44,11 @@ The following non-PII Sales Order fields are configured in Zoho Books:
 - `cf_paid_conversion_dispatched` — checkbox; set to `true` only after the webhook returns success.
 - `cf_paid_conversion_event_id` — unique text field; store the endpoint's returned `event_id`.
 
-Use the Zoho workflow condition `paid_status = paid` and `cf_paid_conversion_dispatched = false`. After a successful callback, write the returned event ID and set the checkbox. This avoids retrying a paid order after a successful dispatch.
+Zoho Books Sales Order workflows do not expose `paid_status` as a rule criterion. The active `Paid Sales Order conversion dispatch` workflow therefore calls the `paid_order_conversion_dispatch` custom function on Sales Order changes. That function reads the current Sales Order, exits unless `paid_status` is `paid`, and only writes these fields after the endpoint reports a non-disabled delivery. This avoids both unpaid-order conversions and duplicate paid-order dispatches.
 
 ## Attribution prerequisites
 
-Zoho Sales Orders currently contain no web attribution fields. Before enabling delivery, add non-health custom fields for GA4 client ID, Meta browser ID (`fbp`), and Meta click ID (`fbc`), then capture them with user consent at lead creation. Do not transmit names, emails, prescriptions, clinic details, or other health-related information.
+Zoho Sales Orders currently contain no web attribution fields. Before enabling delivery, add non-health custom fields for GA4 client ID, Meta browser ID (`fbp`), and Meta click ID (`fbc`), then capture them with user consent at lead creation. The current public Google Form has no such fields, and its editor is not available through the connected Drive account. Do not enable delivery until the form/data-capture design is approved and those values can reach Zoho. Do not transmit names, emails, prescriptions, clinic details, or other health-related information.
 
 ## Enable delivery
 
