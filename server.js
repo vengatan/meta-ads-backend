@@ -109,6 +109,33 @@ function stapeMetaCapiGatewayUrl(organizationId) {
   return url.toString();
 }
 
+function metaCapiTransport() {
+  const value = String(process.env.META_CAPI_TRANSPORT || "stape").trim().toLowerCase();
+  if (!new Set(["stape", "direct"]).has(value)) {
+    throw Object.assign(new Error("META_CAPI_TRANSPORT must be stape or direct"), { status: 503 });
+  }
+  return value;
+}
+
+function metaAccessToken(organizationId) {
+  return organizationSetting("META_ACCESS_TOKENS_BY_ORG", "META_ACCESS_TOKEN", organizationId);
+}
+
+async function postDirectMetaCapi(events, organizationId, pixelId) {
+  const token = metaAccessToken(organizationId);
+  if (!token) return null;
+  const response = await fetch(`${GRAPH_BASE}/${encodeURIComponent(pixelId)}/events`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ data: events, access_token: token })
+  });
+  const data = await parseJson(response);
+  if (!response.ok || data.error) {
+    throw Object.assign(new Error(data?.error?.message || `Meta CAPI delivery failed (${response.status})`), { status: 502, meta: data?.error || data });
+  }
+  return data;
+}
+
 async function postStapeMetaCapi(events, organizationId) {
   const gatewayUrl = stapeMetaCapiGatewayUrl(organizationId);
   if (!gatewayUrl) return null;
@@ -210,9 +237,12 @@ async function sendPaidOrderConversions(order) {
   }
 
   const pixelId = organizationSetting("META_PIXEL_IDS_BY_ORG", "META_PIXEL_ID", order.organizationId);
-  const stapeGatewayUrl = stapeMetaCapiGatewayUrl(order.organizationId);
-  if (pixelId && stapeGatewayUrl && (order.fbp || order.fbc)) {
-    const data = await postStapeMetaCapi([{
+  const transport = metaCapiTransport();
+  const destinationReady = transport === "direct"
+    ? Boolean(metaAccessToken(order.organizationId))
+    : Boolean(stapeMetaCapiGatewayUrl(order.organizationId));
+  if (pixelId && destinationReady && (order.fbp || order.fbc)) {
+    const events = [{
         event_name: "Purchase",
         event_time: Math.floor(Date.parse(order.paidAt) / 1000),
         event_id: order.eventId,
@@ -223,11 +253,14 @@ async function sendPaidOrderConversions(order) {
           ...(order.fbc ? { fbc: order.fbc } : {})
         },
         custom_data: { value: order.amount, currency: order.currency }
-      }], order.organizationId);
+      }];
+    const data = transport === "direct"
+      ? await postDirectMetaCapi(events, order.organizationId, pixelId)
+      : await postStapeMetaCapi(events, order.organizationId);
     if (!data.events_received) throw Object.assign(new Error("Meta purchase delivery was not accepted"), { status: 502 });
-    results.meta = "sent";
+    results.meta = `sent:${transport}`;
   } else {
-    results.meta = "skipped: META_PIXEL_ID, STAPE_META_CAPI_GATEWAY_URL, or Meta browser/click ID is missing";
+    results.meta = `skipped: META_PIXEL_ID, ${transport === "direct" ? "META_ACCESS_TOKEN" : "STAPE_META_CAPI_GATEWAY_URL"}, or Meta browser/click ID is missing`;
   }
 
   return { mode: "enabled", results };
@@ -467,6 +500,47 @@ app.get("/api/insights", async (req, res) => {
       date_range: { since, until },
       data: insights.data || [],
       has_more: Boolean(insights.paging?.next)
+    });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+app.get("/api/zoho/paid-order/config", async (req, res) => {
+  res.set("cache-control", "no-store");
+  try {
+    requirePaidOrderWebhookAuth(req);
+    const organizationIds = String(process.env.ZOHO_ORGANIZATION_IDS || process.env.ZOHO_ORGANIZATION_ID || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const organizations = [];
+    for (const organizationId of organizationIds) {
+      const pixelId = organizationSetting("META_PIXEL_IDS_BY_ORG", "META_PIXEL_ID", organizationId);
+      const token = metaAccessToken(organizationId);
+      let metaAccessible = false;
+      let metaError = null;
+      if (pixelId && token) {
+        const response = await fetch(`${GRAPH_BASE}/${encodeURIComponent(pixelId)}?fields=id&access_token=${encodeURIComponent(token)}`);
+        const data = await parseJson(response);
+        metaAccessible = response.ok && data.id === pixelId;
+        if (!metaAccessible) metaError = data?.error?.message || `Meta check failed (${response.status})`;
+      }
+      organizations.push({
+        organization_id: organizationId,
+        pixel_id: pixelId || null,
+        meta_token_configured: Boolean(token),
+        meta_accessible: metaAccessible,
+        meta_error: metaError,
+        event_source_url_configured: Boolean(organizationSetting("PAID_ORDER_EVENT_SOURCE_URLS_BY_ORG", "PAID_ORDER_EVENT_SOURCE_URL", organizationId))
+      });
+    }
+    return res.status(200).json({
+      ok: true,
+      delivery_enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED === "true",
+      meta_transport: metaCapiTransport(),
+      ga4_configured: Boolean(process.env.GA4_MEASUREMENT_ID && process.env.GA4_API_SECRET),
+      organizations
     });
   } catch (error) {
     return sendError(res, error);

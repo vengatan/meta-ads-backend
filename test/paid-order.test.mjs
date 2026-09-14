@@ -151,6 +151,52 @@ test("rejects malformed organization-specific Meta configuration", async () => {
   }
 });
 
+test("rejects an unknown Meta CAPI transport", async () => {
+  const prior = {
+    enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED,
+    transport: process.env.META_CAPI_TRANSPORT
+  };
+  process.env.PAID_CONVERSION_DELIVERY_ENABLED = "true";
+  process.env.META_CAPI_TRANSPORT = "invented";
+  try {
+    const response = await post(paidOrder({ fbp: "fb.1.1700000000.123456789" }));
+    const data = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(data.error, "META_CAPI_TRANSPORT must be stape or direct");
+  } finally {
+    if (prior.enabled === undefined) delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
+    else process.env.PAID_CONVERSION_DELIVERY_ENABLED = prior.enabled;
+    if (prior.transport === undefined) delete process.env.META_CAPI_TRANSPORT;
+    else process.env.META_CAPI_TRANSPORT = prior.transport;
+  }
+});
+
+test("direct Meta transport remains safely skipped without a matching pixel", async () => {
+  const prior = {
+    enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED,
+    transport: process.env.META_CAPI_TRANSPORT,
+    pixels: process.env.META_PIXEL_IDS_BY_ORG
+  };
+  process.env.PAID_CONVERSION_DELIVERY_ENABLED = "true";
+  process.env.META_CAPI_TRANSPORT = "direct";
+  process.env.META_PIXEL_IDS_BY_ORG = JSON.stringify({ "806878109": "244962973380244" });
+  try {
+    const response = await post(paidOrder({ fbp: "fb.1.1700000000.123456789" }));
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.delivery.results.meta, "skipped: META_PIXEL_ID, META_ACCESS_TOKEN, or Meta browser/click ID is missing");
+  } finally {
+    if (prior.enabled === undefined) delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
+    else process.env.PAID_CONVERSION_DELIVERY_ENABLED = prior.enabled;
+    if (prior.transport === undefined) delete process.env.META_CAPI_TRANSPORT;
+    else process.env.META_CAPI_TRANSPORT = prior.transport;
+    if (prior.pixels === undefined) delete process.env.META_PIXEL_IDS_BY_ORG;
+    else process.env.META_PIXEL_IDS_BY_ORG = prior.pixels;
+  }
+});
+
 test("rejects an invalid webhook secret", async () => {
   const response = await post(paidOrder(), "wrong-secret");
   const data = await response.json();

@@ -57,6 +57,7 @@ After a successful signed webhook test and explicit authorization for conversion
 
 ```text
 PAID_CONVERSION_DELIVERY_ENABLED=true
+META_CAPI_TRANSPORT=direct
 GA4_MEASUREMENT_ID=<GA4 measurement ID>
 GA4_API_SECRET=<GA4 Measurement Protocol secret>
 META_PIXEL_IDS_BY_ORG={"747696142":"209850509573148","806878109":"244962973380244"}
@@ -66,6 +67,8 @@ STAPE_META_CAPI_GATEWAY_TOKEN=<optional Stape gateway bearer token>
 PAID_ORDER_EVENT_SOURCE_URLS_BY_ORG={"747696142":"https://preptaiwan.org/","806878109":"https://prepsingapore.com/"}
 ```
 
-The backend sends Meta purchases only through the organization-specific URL in `STAPE_META_CAPI_GATEWAY_URLS_BY_ORG`; it refuses a Meta Graph URL. Use the exact Stape-provided CAPI request URL—not the public Stape container-script URL—and provide its gateway token if required. Organization-specific Pixel IDs and source URLs prevent Taiwan and Singapore paid orders from being attributed to the wrong dataset. The singular variables remain available only as backward-compatible fallbacks for a one-organization deployment.
+`META_CAPI_TRANSPORT=direct` sends paid purchases to Meta's official Conversions API using `META_ACCESS_TOKEN` (or `META_ACCESS_TOKENS_BY_ORG` when the pixels require separate tokens). This is the supported free fallback for Zoho Books because Stape CAPIG exposes browser-event mirroring and CRM-specific integrations, but does not document a generic live-event endpoint. Keep the existing Stape CAPIG enabled for browser coverage.
+
+Set `META_CAPI_TRANSPORT=stape` only when Stape supplies an exact organization-specific ingestion URL. In that mode, the backend uses `STAPE_META_CAPI_GATEWAY_URLS_BY_ORG` and refuses a Meta Graph URL. Organization-specific Pixel IDs and source URLs prevent Taiwan and Singapore paid orders from being attributed to the wrong dataset. Singular variables remain available only as backward-compatible fallbacks for a one-organization deployment.
 
 GA4 receives the canonical `purchase` event. Google Ads should import that one verified GA4 purchase action as Primary; all duplicate purchase actions remain Secondary.
