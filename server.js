@@ -263,7 +263,11 @@ async function sendPaidOrderConversions(order) {
     results.meta = `skipped: META_PIXEL_ID, ${transport === "direct" ? "META_ACCESS_TOKEN" : "STAPE_META_CAPI_GATEWAY_URL"}, or Meta browser/click ID is missing`;
   }
 
-  return { mode: "enabled", results };
+  return {
+    mode: "enabled",
+    complete: results.ga4 === "sent" && /^sent:/.test(results.meta || ""),
+    results
+  };
 }
 
 function normalizeAccountId(value) {

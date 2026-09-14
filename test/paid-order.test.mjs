@@ -186,6 +186,7 @@ test("direct Meta transport remains safely skipped without a matching pixel", as
     const data = await response.json();
 
     assert.equal(response.status, 200);
+    assert.equal(data.delivery.complete, false);
     assert.equal(data.delivery.results.meta, "skipped: META_PIXEL_ID, META_ACCESS_TOKEN, or Meta browser/click ID is missing");
   } finally {
     if (prior.enabled === undefined) delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
