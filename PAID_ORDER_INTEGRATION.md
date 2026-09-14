@@ -58,8 +58,11 @@ After a successful signed webhook test and explicit authorization for conversion
 ```text
 PAID_CONVERSION_DELIVERY_ENABLED=true
 META_CAPI_TRANSPORT=direct
-GA4_MEASUREMENT_ID=<GA4 measurement ID>
-GA4_API_SECRET=<GA4 Measurement Protocol secret>
+GA4_MEASUREMENT_ID=<GA4 measurement ID for a one-site deployment>
+GA4_API_SECRET=<GA4 Measurement Protocol secret for a one-site deployment>
+# For Taiwan + Singapore, use organization-specific JSON maps instead:
+GA4_MEASUREMENT_IDS_BY_ORG={"747696142":"G-L5NWYL0S9V","806878109":"G-L3QF8L60CP"}
+GA4_API_SECRETS_BY_ORG={"747696142":"<Taiwan secret>","806878109":"<Singapore secret>"}
 META_PIXEL_IDS_BY_ORG={"747696142":"209850509573148","806878109":"244962973380244"}
 META_ACCESS_TOKEN=<Meta Conversions API token>
 STAPE_META_CAPI_GATEWAY_URLS_BY_ORG={"747696142":"<exact Taiwan CAPI ingestion URL>","806878109":"<exact Singapore CAPI ingestion URL>"}

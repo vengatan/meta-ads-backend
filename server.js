@@ -213,8 +213,10 @@ async function sendPaidOrderConversions(order) {
   }
 
   const results = {};
-  if (process.env.GA4_MEASUREMENT_ID && process.env.GA4_API_SECRET && order.gaClientId) {
-    const response = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(process.env.GA4_MEASUREMENT_ID)}&api_secret=${encodeURIComponent(process.env.GA4_API_SECRET)}`, {
+  const ga4MeasurementId = organizationSetting("GA4_MEASUREMENT_IDS_BY_ORG", "GA4_MEASUREMENT_ID", order.organizationId);
+  const ga4ApiSecret = organizationSetting("GA4_API_SECRETS_BY_ORG", "GA4_API_SECRET", order.organizationId);
+  if (ga4MeasurementId && ga4ApiSecret && order.gaClientId) {
+    const response = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(ga4MeasurementId)}&api_secret=${encodeURIComponent(ga4ApiSecret)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -543,7 +545,10 @@ app.get("/api/zoho/paid-order/config", async (req, res) => {
       ok: true,
       delivery_enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED === "true",
       meta_transport: metaCapiTransport(),
-      ga4_configured: Boolean(process.env.GA4_MEASUREMENT_ID && process.env.GA4_API_SECRET),
+      ga4_configured: Boolean(
+        (process.env.GA4_MEASUREMENT_ID && process.env.GA4_API_SECRET) ||
+        (process.env.GA4_MEASUREMENT_IDS_BY_ORG && process.env.GA4_API_SECRETS_BY_ORG)
+      ),
       organizations
     });
   } catch (error) {
