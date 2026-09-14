@@ -103,6 +103,54 @@ test("refuses a direct Meta Graph endpoint when paid delivery is enabled", async
   }
 });
 
+test("does not fall back to another organization's Meta pixel when a map is configured", async () => {
+  const prior = {
+    enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED,
+    pixels: process.env.META_PIXEL_IDS_BY_ORG,
+    pixel: process.env.META_PIXEL_ID,
+    gateways: process.env.STAPE_META_CAPI_GATEWAY_URLS_BY_ORG
+  };
+  process.env.PAID_CONVERSION_DELIVERY_ENABLED = "true";
+  process.env.META_PIXEL_ID = "wrong-global-pixel";
+  process.env.META_PIXEL_IDS_BY_ORG = JSON.stringify({ "806878109": "244962973380244" });
+  process.env.STAPE_META_CAPI_GATEWAY_URLS_BY_ORG = JSON.stringify({ "747696142": "https://gateway.example/events" });
+  try {
+    const response = await post(paidOrder({ fbp: "fb.1.1700000000.123456789" }));
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.delivery.mode, "enabled");
+    assert.match(data.delivery.results.meta, /^skipped:/);
+  } finally {
+    for (const [key, value] of Object.entries(prior)) {
+      const envName = { enabled: "PAID_CONVERSION_DELIVERY_ENABLED", pixels: "META_PIXEL_IDS_BY_ORG", pixel: "META_PIXEL_ID", gateways: "STAPE_META_CAPI_GATEWAY_URLS_BY_ORG" }[key];
+      if (value === undefined) delete process.env[envName];
+      else process.env[envName] = value;
+    }
+  }
+});
+
+test("rejects malformed organization-specific Meta configuration", async () => {
+  const prior = {
+    enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED,
+    pixels: process.env.META_PIXEL_IDS_BY_ORG
+  };
+  process.env.PAID_CONVERSION_DELIVERY_ENABLED = "true";
+  process.env.META_PIXEL_IDS_BY_ORG = "not-json";
+  try {
+    const response = await post(paidOrder({ fbp: "fb.1.1700000000.123456789" }));
+    const data = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(data.error, "META_PIXEL_IDS_BY_ORG must be a JSON object");
+  } finally {
+    if (prior.enabled === undefined) delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
+    else process.env.PAID_CONVERSION_DELIVERY_ENABLED = prior.enabled;
+    if (prior.pixels === undefined) delete process.env.META_PIXEL_IDS_BY_ORG;
+    else process.env.META_PIXEL_IDS_BY_ORG = prior.pixels;
+  }
+});
+
 test("rejects an invalid webhook secret", async () => {
   const response = await post(paidOrder(), "wrong-secret");
   const data = await response.json();

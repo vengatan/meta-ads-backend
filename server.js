@@ -77,8 +77,25 @@ function paidOrderWebhookSecret() {
   return value;
 }
 
-function stapeMetaCapiGatewayUrl() {
-  const raw = String(process.env.STAPE_META_CAPI_GATEWAY_URL || "").trim();
+function organizationSetting(mapName, fallbackName, organizationId) {
+  const rawMap = String(process.env[mapName] || "").trim();
+  if (rawMap) {
+    let values;
+    try {
+      values = JSON.parse(rawMap);
+    } catch {
+      throw Object.assign(new Error(`${mapName} must be a JSON object`), { status: 503 });
+    }
+    if (!values || Array.isArray(values) || typeof values !== "object") {
+      throw Object.assign(new Error(`${mapName} must be a JSON object`), { status: 503 });
+    }
+    return String(values[organizationId] || "").trim();
+  }
+  return String(process.env[fallbackName] || "").trim();
+}
+
+function stapeMetaCapiGatewayUrl(organizationId) {
+  const raw = organizationSetting("STAPE_META_CAPI_GATEWAY_URLS_BY_ORG", "STAPE_META_CAPI_GATEWAY_URL", organizationId);
   if (!raw) return "";
   let url;
   try {
@@ -92,8 +109,8 @@ function stapeMetaCapiGatewayUrl() {
   return url.toString();
 }
 
-async function postStapeMetaCapi(events) {
-  const gatewayUrl = stapeMetaCapiGatewayUrl();
+async function postStapeMetaCapi(events, organizationId) {
+  const gatewayUrl = stapeMetaCapiGatewayUrl(organizationId);
   if (!gatewayUrl) return null;
   const gatewayToken = String(process.env.STAPE_META_CAPI_GATEWAY_TOKEN || "").trim();
   const response = await fetch(gatewayUrl, {
@@ -192,21 +209,21 @@ async function sendPaidOrderConversions(order) {
     results.ga4 = "skipped: GA4 credentials or ga_client_id are missing";
   }
 
-  const pixelId = process.env.META_PIXEL_ID;
-  const stapeGatewayUrl = stapeMetaCapiGatewayUrl();
+  const pixelId = organizationSetting("META_PIXEL_IDS_BY_ORG", "META_PIXEL_ID", order.organizationId);
+  const stapeGatewayUrl = stapeMetaCapiGatewayUrl(order.organizationId);
   if (pixelId && stapeGatewayUrl && (order.fbp || order.fbc)) {
     const data = await postStapeMetaCapi([{
         event_name: "Purchase",
         event_time: Math.floor(Date.parse(order.paidAt) / 1000),
         event_id: order.eventId,
         action_source: "website",
-        event_source_url: process.env.PAID_ORDER_EVENT_SOURCE_URL || "https://preptaiwan.org/",
+        event_source_url: organizationSetting("PAID_ORDER_EVENT_SOURCE_URLS_BY_ORG", "PAID_ORDER_EVENT_SOURCE_URL", order.organizationId) || "https://preptaiwan.org/",
         user_data: {
           ...(order.fbp ? { fbp: order.fbp } : {}),
           ...(order.fbc ? { fbc: order.fbc } : {})
         },
         custom_data: { value: order.amount, currency: order.currency }
-      }]);
+      }], order.organizationId);
     if (!data.events_received) throw Object.assign(new Error("Meta purchase delivery was not accepted"), { status: 502 });
     results.meta = "sent";
   } else {
