@@ -83,6 +83,11 @@ For background Meta account audits, use the Vercel-authenticated read-only endpo
 
 The legacy SG repair path is locked by two independent production gates: paid delivery must already be enabled and `META_TEST_RELAUNCH_APPROVED=true` must be set explicitly. Its read endpoint is non-mutating. The candidate set contains Nightlife–EDM and Tech–Finance only; Dining–Cafe is excluded.
 
+### Meta test definitions after tracking verification
+
+- Account `239740063602735`: relaunch Nightlife–EDM (`120247819803730179`) as control and Tech–Finance (`120247819801930179`) as challenger. Exclude Dining–Cafe (`120247819803050179`). Both retained ad sets currently use 7-day click/1-day view attribution.
+- Account `586574771435951`: campaign `6202696266303` currently has five active variants with mixed optimization and attribution. For its next test, retain only purchased-lookalike conversion ad set `6277866449303` and standardize on 7-day click/1-day view. Exclude active variants `6272219567703` (landing-page optimization), `6266460811703`, `6265445519903`, and `6207473039903`. Do not increase the retained ad set's budget. Make these delivery changes only after canonical purchase tracking is verified.
+
 For password-free Production synchronization, keep service secrets in ignored `.env.local`, store the Vercel token once using Windows DPAPI, and run:
 
 ```powershell
