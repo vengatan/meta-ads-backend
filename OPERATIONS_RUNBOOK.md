@@ -65,6 +65,15 @@ Use the first option that is available. Move to a fallback only after recording 
 5. Browser login is only a fallback for dashboard-only actions. A browser session can expire; that is separate from webhook authentication and must not stop paid-order delivery.
 6. Never print, paste into documentation, or commit secret values. Verify names and presence with `npm run check:config`.
 
+## Desktop and browser non-interference
+
+- Never use Windows Computer Use for this project.
+- Never navigate, reload, focus, close, or reuse a tab the user has open.
+- Prefer connected APIs, MCP tools, CLI, Git, direct `Z:` access, and the existing SFTP profile.
+- BrowserOS is available only through its MCP endpoint on port `9001`. Use it only when an operation is impossible through an API and only in a newly created background tab or isolated session whose creation and operation do not steal focus or alter an existing tab.
+- If an isolated background browser session cannot be verified, stop that browser path and continue with non-browser tools. A logged-in visible dashboard is not authorization to control it.
+- Do not restart BrowserOS, Chrome, or the user's desktop applications as a recovery step.
+
 For password-free Production synchronization, keep service secrets in ignored `.env.local`, store the Vercel token once using Windows DPAPI, and run:
 
 ```powershell
@@ -82,6 +91,7 @@ The first command is a one-time setup (and is repeated only when the token is re
 4. For Vercel environment writes, run `tools/sync-vercel-production.ps1`; never depend on a browser login. If the encrypted token is absent/invalid, run `tools/set-vercel-credential.ps1` once with a team-scoped token for `venga-s-projects`.
 5. Never ask for SFTP credentials when `Z:` is mounted and readable. Both sites use one SFTP account with different root folders.
 6. Record every durable platform or identifier change in this file in the same commit as the code change.
+7. Keep the desktop untouched: no Windows Computer Use and no active-tab automation. BrowserOS port `9001` is a last-resort background-only path under the rules above.
 
 If `Z:` is not mounted and the Vensure Ops connector reports `oauth_refresh_token_missing`, do not ask for the SFTP password again. The existing ignored local credential file is:
 
