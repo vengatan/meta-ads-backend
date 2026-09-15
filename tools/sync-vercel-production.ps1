@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Security
 $projectName = "meta-ads-backend"
 $teamSlug = "venga-s-projects"
 
@@ -33,10 +34,20 @@ $required = @(
     "PAID_ORDER_EVENT_SOURCE_URLS_BY_ORG"
 )
 
-if (-not $config.ContainsKey("VERCEL_TOKEN") -or -not $config["VERCEL_TOKEN"]) {
-    if (Test-Path -LiteralPath $CredentialFile) {
-        $secureToken = Get-Content -Raw -LiteralPath $CredentialFile | ConvertTo-SecureString
-        $config["VERCEL_TOKEN"] = [System.Net.NetworkCredential]::new("", $secureToken).Password
+if (Test-Path -LiteralPath $CredentialFile) {
+    $encryptedBytes = [Convert]::FromBase64String((Get-Content -Raw -LiteralPath $CredentialFile).Trim())
+    $plainBytes = [Security.Cryptography.ProtectedData]::Unprotect(
+        $encryptedBytes,
+        $null,
+        [Security.Cryptography.DataProtectionScope]::CurrentUser
+    )
+    try {
+        # The encrypted Windows credential is authoritative. This prevents a
+        # stale plaintext VERCEL_TOKEN in .env.local from overriding it.
+        $config["VERCEL_TOKEN"] = [Text.Encoding]::UTF8.GetString($plainBytes)
+    }
+    finally {
+        [Array]::Clear($plainBytes, 0, $plainBytes.Length)
     }
 }
 
