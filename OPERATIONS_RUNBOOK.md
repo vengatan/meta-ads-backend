@@ -103,6 +103,7 @@ Changing a Production environment variable requires a new production deployment.
 
 - Taiwan lead attribution capture is installed in `site/chn/orderform.php`.
 - Singapore's unpaid/duplicate order-confirmation purchase hooks are disabled in both `stapega4` and `stapetracking`; backups: `stapega4.php.codex-backup-20260915` and `stapetracking.php.codex-backup-20260915`.
+- Singapore's order confirmation now pushes non-PII `order_form_submitted`, and published GTM version `38` maps it once to GA4 `generate_lead`. Published version `39` pauses the final legacy Purchase dataLayer builder. The live container contains `order_form_submitted`/`generate_lead` and no active legacy Purchase builder.
 - Vercel Deployment Protection has an automation bypass, and the Zoho function includes its header.
 - Two Vercel projects are linked to the same GitHub repository. Zoho production uses `meta-ads-backend-two.vercel.app`, owned by project `meta-ads-backend`; the similarly named `vensure-meta-ads-bridge` deployment is not the paid-order target.
 - Production delivery and GA4 Measurement Protocol readiness must be verified after the next environment update and redeployment.
