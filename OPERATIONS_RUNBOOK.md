@@ -135,6 +135,8 @@ The script prompts securely for the Taiwan and Singapore secrets, stores the org
 3. Confirm the backend config endpoint reports delivery enabled and both organizations configured. Do not log secrets.
 4. Deploy production and verify `/api/ping` through the automation-bypass header.
 5. Use a controlled paid order or an existing newly paid live order; do not invent a patient order.
+   - Prefer a post-repair real order that has a genuine matching row in `Conversion Attribution`.
+   - If its automatic workflow already ran while delivery was disabled, execute custom function `2637982000045183001` for the Sales Order entity through Zoho Workflow after Production is enabled. Do not alter payment state or create a replacement order.
 6. Verify exactly one GA4 purchase and one canonical Google Ads purchase.
 7. Verify Meta browser/server events deduplicate with the same event ID.
 8. Only after verification, begin the 2–4 week Google test using canonical purchase only.
@@ -164,4 +166,5 @@ The script prompts securely for the Taiwan and Singapore secrets, stores the org
 - The paid-order backend contract accepts GA client/session IDs, GCLID/GBRAID/WBRAID, Meta IDs and UTM fields. GA4 `transaction_id` is the canonical response Sheet Order Number; the hashed `event_id` is reserved for cross-platform deduplication.
 - Active Make scenario `4920650` receives the canonical response Order Number, searches column A of `Conversion Attribution`, and returns only advertising attribution fields. Its existing Google connection `284990` is healthy. The webhook URL is stored in the Zoho function and must not be copied into documentation or chat.
 - The deployed Zoho function now calls scenario `4920650` with `reference_number` before dispatching a paid order. A matching row enriches the backend payload with GA/Meta/click/UTM fields; a missing row returns Make's plain `Accepted` response and is safely left unenriched and undispatched. No Sheet row number or Zoho `salesorder_number` is used.
+- Zoho custom-function history confirms paid order `6525` reached both the Make lookup and Vercel paid-order endpoint while delivery was disabled; the function completed safely and left `cf_paid_conversion_dispatched=false`. Successful-but-undispatched runs can be retried after activation with the Zoho Workflow execute-custom-function action, using the Sales Order entity ID rather than replaying only failed history records.
 - The lookup was verified with a temporary non-order probe covering all 16 attribution columns. The probe and 37 formula-only setup rows (all other cells empty) were removed immediately after verification; the production tab contains no synthetic test order.
