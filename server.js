@@ -202,8 +202,20 @@ function parsePaidOrder(payload) {
     paidAt: paidAt || new Date().toISOString(),
     eventId,
     gaClientId: typeof payload?.ga_client_id === "string" ? payload.ga_client_id.trim() : "",
+    gaSessionId: typeof payload?.ga_session_id === "string" ? payload.ga_session_id.trim() : "",
+    gclid: typeof payload?.gclid === "string" ? payload.gclid.trim() : "",
+    gbraid: typeof payload?.gbraid === "string" ? payload.gbraid.trim() : "",
+    wbraid: typeof payload?.wbraid === "string" ? payload.wbraid.trim() : "",
     fbp: typeof payload?.fbp === "string" ? payload.fbp.trim() : "",
-    fbc: typeof payload?.fbc === "string" ? payload.fbc.trim() : ""
+    fbc: typeof payload?.fbc === "string" ? payload.fbc.trim() : "",
+    attribution: {
+      landingPage: typeof payload?.landing_page === "string" ? payload.landing_page.trim() : "",
+      utmSource: typeof payload?.utm_source === "string" ? payload.utm_source.trim() : "",
+      utmMedium: typeof payload?.utm_medium === "string" ? payload.utm_medium.trim() : "",
+      utmCampaign: typeof payload?.utm_campaign === "string" ? payload.utm_campaign.trim() : "",
+      utmTerm: typeof payload?.utm_term === "string" ? payload.utm_term.trim() : "",
+      utmContent: typeof payload?.utm_content === "string" ? payload.utm_content.trim() : ""
+    }
   };
 }
 
@@ -224,10 +236,17 @@ async function sendPaidOrderConversions(order) {
         events: [{
           name: "purchase",
           params: {
-            transaction_id: order.eventId,
+            // The canonical transaction identity is the response Sheet Order
+            // Number. eventId remains the cross-platform deduplication key.
+            transaction_id: order.responseOrderNumber,
             value: order.amount,
             currency: order.currency,
-            engagement_time_msec: 1
+            engagement_time_msec: 1,
+            ...(order.gaSessionId ? { session_id: order.gaSessionId } : {}),
+            ...(order.gclid ? { gclid: order.gclid } : {}),
+            ...(order.gbraid ? { gbraid: order.gbraid } : {}),
+            ...(order.wbraid ? { wbraid: order.wbraid } : {}),
+            ...order.attribution
           }
         }]
       })

@@ -64,13 +64,23 @@ Use the first option that is available. Move to a fallback only after recording 
 5. Browser login is only a fallback for dashboard-only actions. A browser session can expire; that is separate from webhook authentication and must not stop paid-order delivery.
 6. Never print, paste into documentation, or commit secret values. Verify names and presence with `npm run check:config`.
 
-For a password-free Production synchronization, populate the ignored `.env.local` once and run:
+For password-free Production synchronization, keep service secrets in ignored `.env.local`, store the Vercel token once using Windows DPAPI, and run:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File tools/set-vercel-credential.ps1
 powershell -ExecutionPolicy Bypass -File tools/sync-vercel-production.ps1 -Deploy
 ```
 
-The script verifies the token and every required value before changing anything, explicitly links the canonical `meta-ads-backend` project, updates variables without displaying values, and deploys only when requested. It refuses partial configuration.
+The first command is a one-time setup (and is repeated only when the token is revoked or rotated). The token is encrypted for the current Windows account under `%LOCALAPPDATA%\Vensure\meta-ads-backend`, outside the repository. The sync script verifies the token and every required value before changing anything, explicitly links the canonical `meta-ads-backend` project, updates variables without displaying values, and deploys only when requested. It refuses partial configuration.
+
+### Fixed handover sequence for every future task
+
+1. Read this runbook; do not rediscover platform paths or create replacement projects/connections.
+2. Run `npm run check:config`. A missing service secret is a configuration issue; a Vercel `User not found` response means the saved token was revoked or belongs to the wrong account.
+3. Use connected plugins first according to the routing table. Reuse healthy Make/Google/Zoho connections; do not request OAuth again when their status is `ok`.
+4. For Vercel environment writes, run `tools/sync-vercel-production.ps1`; never depend on a browser login. If the encrypted token is absent/invalid, run `tools/set-vercel-credential.ps1` once with a team-scoped token for `venga-s-projects`.
+5. Never ask for SFTP credentials when `Z:` is mounted and readable. Both sites use one SFTP account with different root folders.
+6. Record every durable platform or identifier change in this file in the same commit as the code change.
 
 ## Required production configuration
 
@@ -112,3 +122,5 @@ Changing a Production environment variable requires a new production deployment.
 - Vercel Deployment Protection has an automation bypass, and the Zoho function includes its header.
 - Two Vercel projects are linked to the same GitHub repository. Zoho production uses `meta-ads-backend-two.vercel.app`, owned by project `meta-ads-backend`; the similarly named `vensure-meta-ads-bridge` deployment is not the paid-order target.
 - Production delivery and GA4 Measurement Protocol readiness must be verified after the next environment update and redeployment.
+- The paid-order backend contract accepts GA client/session IDs, GCLID/GBRAID/WBRAID, Meta IDs and UTM fields. GA4 `transaction_id` is the canonical response Sheet Order Number; the hashed `event_id` is reserved for cross-platform deduplication.
+- The deployed Zoho function currently does **not** enrich paid orders with the attribution row. It sends only order/payment fields. Until a lookup by `reference_number` is added, GA4 and Meta delivery cannot complete even with correct Vercel credentials.

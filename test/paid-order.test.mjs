@@ -46,6 +46,40 @@ test("accepts a signed paid order without enabling delivery", async () => {
   assert.doesNotMatch(data.event_id, /6517/);
 });
 
+test("uses the response Sheet Order Number as the canonical transaction identity", async () => {
+  const priorFetch = globalThis.fetch;
+  const prior = {
+    enabled: process.env.PAID_CONVERSION_DELIVERY_ENABLED,
+    measurement: process.env.GA4_MEASUREMENT_ID,
+    secret: process.env.GA4_API_SECRET
+  };
+  let gaPayload;
+  process.env.PAID_CONVERSION_DELIVERY_ENABLED = "true";
+  process.env.GA4_MEASUREMENT_ID = "G-TEST";
+  process.env.GA4_API_SECRET = "api-secret";
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes("google-analytics.com")) {
+      gaPayload = JSON.parse(options.body);
+      return new Response(null, { status: 204 });
+    }
+    return priorFetch(url, options);
+  };
+  try {
+    const response = await post(paidOrder({ ga_client_id: "123.456", ga_session_id: "789" }));
+    assert.equal(response.status, 200);
+    assert.equal(gaPayload.events[0].params.transaction_id, "6517");
+    assert.equal(gaPayload.events[0].params.session_id, "789");
+  } finally {
+    globalThis.fetch = priorFetch;
+    if (prior.enabled === undefined) delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
+    else process.env.PAID_CONVERSION_DELIVERY_ENABLED = prior.enabled;
+    if (prior.measurement === undefined) delete process.env.GA4_MEASUREMENT_ID;
+    else process.env.GA4_MEASUREMENT_ID = prior.measurement;
+    if (prior.secret === undefined) delete process.env.GA4_API_SECRET;
+    else process.env.GA4_API_SECRET = prior.secret;
+  }
+});
+
 test("accepts a paid order from the second Zoho Books organization", async () => {
   const prior = process.env.ZOHO_ORGANIZATION_IDS;
   process.env.ZOHO_ORGANIZATION_IDS = "747696142,806878109";

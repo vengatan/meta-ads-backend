@@ -1,5 +1,6 @@
 param(
     [string]$EnvFile = ".env.local",
+    [string]$CredentialFile = "$env:LOCALAPPDATA\Vensure\meta-ads-backend\vercel-token.dpapi",
     [switch]$Deploy
 )
 
@@ -21,7 +22,6 @@ foreach ($rawLine in Get-Content -LiteralPath $EnvFile) {
 }
 
 $required = @(
-    "VERCEL_TOKEN",
     "ZOHO_ORGANIZATION_IDS",
     "ZOHO_PAID_ORDER_WEBHOOK_SECRET",
     "PAID_CONVERSION_DELIVERY_ENABLED",
@@ -32,6 +32,17 @@ $required = @(
     "META_ACCESS_TOKEN",
     "PAID_ORDER_EVENT_SOURCE_URLS_BY_ORG"
 )
+
+if (-not $config.ContainsKey("VERCEL_TOKEN") -or -not $config["VERCEL_TOKEN"]) {
+    if (Test-Path -LiteralPath $CredentialFile) {
+        $secureToken = Get-Content -Raw -LiteralPath $CredentialFile | ConvertTo-SecureString
+        $config["VERCEL_TOKEN"] = [System.Net.NetworkCredential]::new("", $secureToken).Password
+    }
+}
+
+if (-not $config.ContainsKey("VERCEL_TOKEN") -or -not $config["VERCEL_TOKEN"]) {
+    throw "No Vercel credential is available. Run tools/set-vercel-credential.ps1 once; future syncs will reuse the encrypted Windows credential."
+}
 
 $missing = @($required | Where-Object { -not $config.ContainsKey($_) -or -not $config[$_] })
 if ($missing.Count -gt 0) {
@@ -53,7 +64,7 @@ try {
     $listed = (& npx vercel env list production --scope $teamSlug --no-color 2>&1 | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "Could not list Production environment variables." }
 
-    foreach ($key in $required | Where-Object { $_ -ne "VERCEL_TOKEN" }) {
+    foreach ($key in $required) {
         $verb = if ($listed -match "(?m)^\s*$([regex]::Escape($key))\s") { "update" } else { "add" }
         $config[$key] | & npx vercel env $verb $key production --scope $teamSlug --no-color | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Failed to $verb Production variable $key." }
