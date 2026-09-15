@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { once } from "node:events";
 import test from "node:test";
 
@@ -34,6 +35,31 @@ async function post(payload, secret = "test-secret") {
     body: JSON.stringify(payload)
   });
 }
+
+test("keeps the Meta relaunch locked until tracking and explicit approval are both enabled", async () => {
+  const prior = {
+    token: process.env.META_ACCESS_TOKEN,
+    delivery: process.env.PAID_CONVERSION_DELIVERY_ENABLED,
+    approval: process.env.META_TEST_RELAUNCH_APPROVED
+  };
+  process.env.META_ACCESS_TOKEN = "test-meta-token";
+  delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
+  delete process.env.META_TEST_RELAUNCH_APPROVED;
+  const key = crypto.createHash("sha256").update("sg-lab-repair:test-meta-token").digest("base64url");
+  try {
+    const response = await fetch(`${baseUrl}/api/repair-sg-lab/activate?k=${encodeURIComponent(key)}`);
+    const data = await response.json();
+    assert.equal(response.status, 409);
+    assert.match(data.error, /relaunch is locked/i);
+  } finally {
+    if (prior.token === undefined) delete process.env.META_ACCESS_TOKEN;
+    else process.env.META_ACCESS_TOKEN = prior.token;
+    if (prior.delivery === undefined) delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
+    else process.env.PAID_CONVERSION_DELIVERY_ENABLED = prior.delivery;
+    if (prior.approval === undefined) delete process.env.META_TEST_RELAUNCH_APPROVED;
+    else process.env.META_TEST_RELAUNCH_APPROVED = prior.approval;
+  }
+});
 
 test("accepts a signed paid order without enabling delivery", async () => {
   const response = await post(paidOrder());
