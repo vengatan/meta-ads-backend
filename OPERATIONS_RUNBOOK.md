@@ -74,6 +74,13 @@ Use the first option that is available. Move to a fallback only after recording 
 - If an isolated background browser session cannot be verified, stop that browser path and continue with non-browser tools. A logged-in visible dashboard is not authorization to control it.
 - Do not restart BrowserOS, Chrome, or the user's desktop applications as a recovery step.
 
+For background Meta account audits, use the Vercel-authenticated read-only endpoints instead of Ads Manager:
+
+- `/api/insights?account_id=<ID>&level=campaign|adset|ad&since=YYYY-MM-DD&until=YYYY-MM-DD`
+- `/api/account-structure?account_id=<ID>`
+
+`META_ALLOWED_ACCOUNTS` must contain exactly the approved accounts `239740063602735` and `586574771435951`. These endpoints do not activate, pause, or edit campaigns.
+
 For password-free Production synchronization, keep service secrets in ignored `.env.local`, store the Vercel token once using Windows DPAPI, and run:
 
 ```powershell
@@ -151,6 +158,7 @@ The script prompts securely for the Taiwan and Singapore secrets, stores the org
 - Vercel CLI access is now stored with Windows CurrentUser DPAPI at `%LOCALAPPDATA%\Vensure\meta-ads-backend\vercel-token.dpapi`; team access to `venga-s-projects` was verified. The sync script gives this encrypted credential precedence over any stale plaintext token in `.env.local`.
 - The Zoho/Vercel paid-order webhook secret was rotated together, stored as a hidden Vercel Secret, deployed in production deployment `dpl_7dkki11BTLWGiHbMDF7cshSgySkg`, and authenticated successfully against the production config endpoint.
 - Direct Meta CAPI credentials are configured and API-accessible for both pixels. Production delivery remains off because `GA4_API_SECRETS_BY_ORG` is not configured; do not enable the delivery flag until both GA4 stream secrets exist.
+- Production Meta account access now allows both approved ad accounts (`239740063602735` and `586574771435951`). The read-only insights endpoint was verified against both accounts after deployment `dpl_HjcnncSEYf4vh9uEuprK7GBeR2J6`.
 - The paid-order backend contract accepts GA client/session IDs, GCLID/GBRAID/WBRAID, Meta IDs and UTM fields. GA4 `transaction_id` is the canonical response Sheet Order Number; the hashed `event_id` is reserved for cross-platform deduplication.
 - Active Make scenario `4920650` receives the canonical response Order Number, searches column A of `Conversion Attribution`, and returns only advertising attribution fields. Its existing Google connection `284990` is healthy. The webhook URL is stored in the Zoho function and must not be copied into documentation or chat.
 - The deployed Zoho function now calls scenario `4920650` with `reference_number` before dispatching a paid order. A matching row enriches the backend payload with GA/Meta/click/UTM fields; a missing row returns Make's plain `Accepted` response and is safely left unenriched and undispatched. No Sheet row number or Zoho `salesorder_number` is used.

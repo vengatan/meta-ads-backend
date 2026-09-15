@@ -531,6 +531,34 @@ app.get("/api/insights", async (req, res) => {
   }
 });
 
+app.get("/api/account-structure", async (req, res) => {
+  // This route is read-only and remains behind Vercel Deployment Protection.
+  // It exists so account audits do not depend on a human Ads Manager session.
+  res.set("cache-control", "no-store");
+  try {
+    const accountId = requireAllowedAccount(req.query.account_id || ACCOUNT_ID);
+    const [campaigns, adsets] = await Promise.all([
+      graphGet(`${accountId}/campaigns`, {
+        fields: "id,name,status,effective_status,objective,buying_type,daily_budget,lifetime_budget,bid_strategy,start_time,stop_time",
+        limit: 100
+      }),
+      graphGet(`${accountId}/adsets`, {
+        fields: "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_strategy,attribution_spec,start_time,end_time",
+        limit: 100
+      })
+    ]);
+    return res.status(200).json({
+      ok: true,
+      account_id: accountId,
+      campaigns: campaigns.data || [],
+      adsets: adsets.data || [],
+      has_more: Boolean(campaigns.paging?.next || adsets.paging?.next)
+    });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
 app.get("/api/zoho/paid-order/config", async (req, res) => {
   res.set("cache-control", "no-store");
   try {
