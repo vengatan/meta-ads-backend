@@ -61,6 +61,14 @@ Use the first option that is available. Move to a fallback only after recording 
 5. Browser login is only a fallback for dashboard-only actions. A browser session can expire; that is separate from webhook authentication and must not stop paid-order delivery.
 6. Never print, paste into documentation, or commit secret values. Verify names and presence with `npm run check:config`.
 
+For a password-free Production synchronization, populate the ignored `.env.local` once and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/sync-vercel-production.ps1 -Deploy
+```
+
+The script verifies the token and every required value before changing anything, explicitly links the canonical `meta-ads-backend` project, updates variables without displaying values, and deploys only when requested. It refuses partial configuration.
+
 ## Required production configuration
 
 The backend requires the variables listed in `.env.example`. In particular:
