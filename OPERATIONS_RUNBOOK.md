@@ -21,7 +21,8 @@ This is the authoritative handover for Prep Taiwan and Prep Singapore conversion
 | SFTP host | `home717421847.1and1-data.host:22` |
 | SFTP Taiwan root | `/preptaiwan` |
 | SFTP Singapore root | `/clickandbuilds/PrestaShop/PrepSingapore` |
-| Vercel team/project | `venga-s-projects/vensure-meta-ads-bridge` |
+| Vercel team/production project | `venga-s-projects/meta-ads-backend` (`prj_VBomrgTjO8wa7WrPZRz6oXPpu578`) |
+| Duplicate linked Vercel project | `venga-s-projects/vensure-meta-ads-bridge` (`prj_h5b77DeP6ziNVwxJpa8Qje2CPD5e`) — do not use for Zoho production |
 | Paid-order endpoint | `https://meta-ads-backend-two.vercel.app/api/zoho/paid-order` |
 | Zoho Books primary org | `747696142` |
 | Zoho Books Singapore org | `806878109` |
@@ -42,7 +43,7 @@ Use the first option that is available. Move to a fallback only after recording 
 | --- | --- | --- | --- |
 | Live website files | Direct `Z:` paths | Vensure Ops SFTP, then SFTP client | The two sites are folders on the same host; no separate credential profile is required. Back up a live file before editing it. |
 | Git/source | Local repository and Git | GitHub browser | Never commit `.env.local` or credential values. |
-| Vercel | Connected Vercel tools/CLI with a team-scoped token | Logged-in Vercel browser | Project scope is `venga-s-projects`. Do not create a new token merely because an old task forgot the project scope. |
+| Vercel | Connected Vercel tools for project/deployment reads and deploys | Logged-in Vercel browser for environment-variable changes; CLI only with a verified team-scoped token | Production project is `meta-ads-backend`, not the duplicate `vensure-meta-ads-bridge`. Do not create a new token merely because an old task selected the wrong project. |
 | Zoho paid state/workflow | ZOHO MCP NEW / Zoho Workflow | Zoho Inventory for Sales Order retrieval | Books org `747696142` is primary. A purchase is valid only when paid status is confirmed. |
 | GTM | GTM plugin | Logged-in GTM browser | Publish only after workspace review. Disable duplicate legacy purchase tags. |
 | Google Ads | Composio Google Ads for reads/audits | Logged-in Google Ads browser for unsupported writes | Keep conversion action `849227724` as the only canonical Primary purchase. |
@@ -56,7 +57,7 @@ Use the first option that is available. Move to a fallback only after recording 
 1. Machine-to-machine traffic must never depend on a human dashboard session.
 2. Zoho sends both `x-zoho-paid-order-secret` and `x-vercel-protection-bypass`. The matching values live in Zoho and Vercel only.
 3. Vercel secrets live in Production environment variables. Local copies belong only in ignored `.env.local`.
-4. `VERCEL_TOKEN` must be a team-scoped token with access to `venga-s-projects/vensure-meta-ads-bridge`. Reuse it until deliberately rotated or revoked.
+4. `VERCEL_TOKEN` must be a team-scoped token with access to `venga-s-projects/meta-ads-backend`. Validate it with `vercel whoami` before relying on it. The connected Vercel integration is the preferred persistent access path.
 5. Browser login is only a fallback for dashboard-only actions. A browser session can expire; that is separate from webhook authentication and must not stop paid-order delivery.
 6. Never print, paste into documentation, or commit secret values. Verify names and presence with `npm run check:config`.
 
@@ -95,4 +96,5 @@ Changing a Production environment variable requires a new production deployment.
 - Taiwan lead attribution capture is installed in `site/chn/orderform.php`.
 - Singapore's duplicate `stapetracking` purchase hook is disabled; backup: `stapetracking.php.codex-backup-20260915`.
 - Vercel Deployment Protection has an automation bypass, and the Zoho function includes its header.
+- Two Vercel projects are linked to the same GitHub repository. Zoho production uses `meta-ads-backend-two.vercel.app`, owned by project `meta-ads-backend`; the similarly named `vensure-meta-ads-bridge` deployment is not the paid-order target.
 - Production delivery and GA4 Measurement Protocol readiness must be verified after the next environment update and redeployment.
