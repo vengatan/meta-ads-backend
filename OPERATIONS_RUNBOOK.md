@@ -102,7 +102,7 @@ Changing a Production environment variable requires a new production deployment.
 ## Current known state
 
 - Taiwan lead attribution capture is installed in `site/chn/orderform.php`.
-- Singapore's duplicate `stapetracking` purchase hook is disabled; backup: `stapetracking.php.codex-backup-20260915`.
+- Singapore's unpaid/duplicate order-confirmation purchase hooks are disabled in both `stapega4` and `stapetracking`; backups: `stapega4.php.codex-backup-20260915` and `stapetracking.php.codex-backup-20260915`.
 - Vercel Deployment Protection has an automation bypass, and the Zoho function includes its header.
 - Two Vercel projects are linked to the same GitHub repository. Zoho production uses `meta-ads-backend-two.vercel.app`, owned by project `meta-ads-backend`; the similarly named `vensure-meta-ads-bridge` deployment is not the paid-order target.
 - Production delivery and GA4 Measurement Protocol readiness must be verified after the next environment update and redeployment.
