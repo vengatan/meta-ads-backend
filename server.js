@@ -12,7 +12,6 @@ const ACCOUNT_ID = "act_239740063602735";
 const CONTROL_CREATIVE_ID = "23851859866720178";
 const REPAIR_ADSETS = [
   ["120247819803730179", "SG Profile Nightlife-EDM | Public control repair v2 2026-08-26"],
-  ["120247819803050179", "SG Profile Dining-Cafe | Public control repair v2 2026-08-26"],
   ["120247819801930179", "SG Profile Tech-Finance | Public control repair v2 2026-08-26"]
 ];
 
@@ -325,6 +324,19 @@ async function graphGet(path, params = {}) {
   return data;
 }
 
+async function graphGetAll(path, params = {}, maxPages = 10) {
+  const data = [];
+  let after;
+  let pages = 0;
+  do {
+    const page = await graphGet(path, { ...params, ...(after ? { after } : {}) });
+    data.push(...(page.data || []));
+    after = page.paging?.cursors?.after;
+    pages += 1;
+  } while (after && pages < maxPages);
+  return { data, truncated: Boolean(after), pages };
+}
+
 async function graphPost(path, params = {}) {
   const body = new URLSearchParams();
   body.set("access_token", accessToken());
@@ -402,6 +414,9 @@ async function findOrCreateRepairAds() {
 }
 
 async function ensureRepairAdsActive() {
+  if (process.env.PAID_CONVERSION_DELIVERY_ENABLED !== "true" || process.env.META_TEST_RELAUNCH_APPROVED !== "true") {
+    throw Object.assign(new Error("Meta relaunch is locked until paid conversion delivery is verified and explicitly approved"), { status: 409 });
+  }
   await findOrCreateRepairAds();
   const current = await listRepairAds();
   const changed = [];
@@ -538,11 +553,11 @@ app.get("/api/account-structure", async (req, res) => {
   try {
     const accountId = requireAllowedAccount(req.query.account_id || ACCOUNT_ID);
     const [campaigns, adsets] = await Promise.all([
-      graphGet(`${accountId}/campaigns`, {
+      graphGetAll(`${accountId}/campaigns`, {
         fields: "id,name,status,effective_status,objective,buying_type,daily_budget,lifetime_budget,bid_strategy,start_time,stop_time",
         limit: 100
       }),
-      graphGet(`${accountId}/adsets`, {
+      graphGetAll(`${accountId}/adsets`, {
         fields: "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_strategy,attribution_spec,start_time,end_time",
         limit: 100
       })
@@ -550,9 +565,10 @@ app.get("/api/account-structure", async (req, res) => {
     return res.status(200).json({
       ok: true,
       account_id: accountId,
-      campaigns: campaigns.data || [],
-      adsets: adsets.data || [],
-      has_more: Boolean(campaigns.paging?.next || adsets.paging?.next)
+      campaigns: campaigns.data,
+      adsets: adsets.data,
+      has_more: campaigns.truncated || adsets.truncated,
+      pages: { campaigns: campaigns.pages, adsets: adsets.pages }
     });
   } catch (error) {
     return sendError(res, error);
@@ -655,7 +671,7 @@ app.get("/api/repair-sg-lab", async (req, res) => {
   res.set("cache-control", "no-store");
   try {
     requireRepairAuth(req);
-    const ads = await findOrCreateRepairAds();
+    const ads = await listRepairAds();
     return res.status(200).json({ ok: true, account_id: ACCOUNT_ID, creative_id: CONTROL_CREATIVE_ID, ads });
   } catch (error) {
     return sendError(res, error);
