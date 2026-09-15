@@ -102,6 +102,7 @@ Changing a Production environment variable requires a new production deployment.
 ## Current known state
 
 - Taiwan lead attribution capture is installed in `site/chn/orderform.php`.
+- Taiwan's live order form now captures GCLID, GBRAID, WBRAID, Meta browser/click IDs and UTM fields, validates the Google Forms message origin/source, and pushes one `order_form_submitted` event before redirect. Published GTM version `81` maps that event to GA4 `generate_lead` with its deterministic dataLayer event ID; legacy purchase tags remain paused. Rollback copy: `orderform.php.codex-backup-20260915-lead-event`.
 - Singapore's unpaid/duplicate order-confirmation purchase hooks are disabled in both `stapega4` and `stapetracking`; backups: `stapega4.php.codex-backup-20260915` and `stapetracking.php.codex-backup-20260915`.
 - Singapore's order confirmation now pushes non-PII `order_form_submitted`, and published GTM version `38` maps it once to GA4 `generate_lead`. Published version `39` pauses the final legacy Purchase dataLayer builder. The live container contains `order_form_submitted`/`generate_lead` and no active legacy Purchase builder.
 - Vercel Deployment Protection has an automation bypass, and the Zoho function includes its header.
