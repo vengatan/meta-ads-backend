@@ -83,6 +83,12 @@ The first command is a one-time setup (and is repeated only when the token is re
 5. Never ask for SFTP credentials when `Z:` is mounted and readable. Both sites use one SFTP account with different root folders.
 6. Record every durable platform or identifier change in this file in the same commit as the code change.
 
+If `Z:` is not mounted and the Vensure Ops connector reports `oauth_refresh_token_missing`, do not ask for the SFTP password again. The existing ignored local credential file is:
+
+`C:\Users\wa_li\Documents\Codex\2026-09-13\computer-use-plugin-computer-use-openai\.env.local`
+
+It contains the single shared `SFTP_HOST`, `SFTP_PORT`, `SFTP_USERNAME`, and `SFTP_PASSWORD` profile. Use `/preptaiwan` or `/clickandbuilds/PrestaShop/PrepSingapore` as the remote root. Reconnect the connector only when its managed write tools are specifically needed; its OAuth status does not invalidate the SFTP account.
+
 ## Required production configuration
 
 The backend requires the variables listed in `.env.example`. In particular:
