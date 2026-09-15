@@ -101,6 +101,14 @@ The backend requires the variables listed in `.env.example`. In particular:
 
 Changing a Production environment variable requires a new production deployment.
 
+After creating one Measurement Protocol API secret in each GA4 web stream, finish the gate without placing either secret in chat or a file:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/enable-paid-conversion-delivery.ps1
+```
+
+The script prompts securely for the Taiwan and Singapore secrets, stores the organization-keyed map as a sensitive Vercel value, enables paid delivery only after both values are present, and deploys the canonical project using the saved DPAPI credential.
+
 ## Release and verification checklist
 
 1. Run `npm test` and `npm run check:config` locally.
