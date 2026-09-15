@@ -35,6 +35,7 @@ This is the authoritative handover for Prep Taiwan and Prep Singapore conversion
 | Taiwan GA4 / Meta | `G-L5NWYL0S9V` / pixel `209850509573148` |
 | Singapore GA4 / Meta | `G-L3QF8L60CP` / pixel `244962973380244` |
 | Make attribution scenario | `4920018` — `Paid Order Attribution Capture` (active) |
+| Make paid lookup scenario | `4920650` — `Paid Order Attribution Lookup` (active) |
 | Taiwan response spreadsheet | `1Fn0ExrJcNSSTEPcQUGPm0fX0UgsZ0rTI8oiGnek2_co` |
 | Attribution tab | `Conversion Attribution` (`sheetId` `2109152026`) |
 
@@ -123,4 +124,6 @@ Changing a Production environment variable requires a new production deployment.
 - Two Vercel projects are linked to the same GitHub repository. Zoho production uses `meta-ads-backend-two.vercel.app`, owned by project `meta-ads-backend`; the similarly named `vensure-meta-ads-bridge` deployment is not the paid-order target.
 - Production delivery and GA4 Measurement Protocol readiness must be verified after the next environment update and redeployment.
 - The paid-order backend contract accepts GA client/session IDs, GCLID/GBRAID/WBRAID, Meta IDs and UTM fields. GA4 `transaction_id` is the canonical response Sheet Order Number; the hashed `event_id` is reserved for cross-platform deduplication.
-- The deployed Zoho function currently does **not** enrich paid orders with the attribution row. It sends only order/payment fields. Until a lookup by `reference_number` is added, GA4 and Meta delivery cannot complete even with correct Vercel credentials.
+- Active Make scenario `4920650` receives the canonical response Order Number, searches column A of `Conversion Attribution`, and returns only advertising attribution fields. Its existing Google connection `284990` is healthy. The webhook URL is stored in the Zoho function and must not be copied into documentation or chat.
+- The deployed Zoho function now calls scenario `4920650` with `reference_number` before dispatching a paid order. A matching row enriches the backend payload with GA/Meta/click/UTM fields; a missing row returns Make's plain `Accepted` response and is safely left unenriched and undispatched. No Sheet row number or Zoho `salesorder_number` is used.
+- The lookup was verified with a temporary non-order probe covering all 16 attribution columns. The probe and 37 formula-only setup rows (all other cells empty) were removed immediately after verification; the production tab contains no synthetic test order.
