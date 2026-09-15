@@ -661,6 +661,15 @@ app.post("/api/meta", async (req, res) => {
       return res.status(200).json({ ok: true, ad_id: adId, status, meta: data });
     }
 
+    if (op === "set_adset_status") {
+      const adsetId = String(req.body.adset_id || "");
+      const status = String(req.body.status || "").toUpperCase();
+      if (!/^\d+$/.test(adsetId) || !["ACTIVE", "PAUSED"].includes(status)) return res.status(400).json({ ok: false, error: "Invalid adset_id or status" });
+      await requireAllowedObject(adsetId);
+      const data = await graphPost(adsetId, { status });
+      return res.status(200).json({ ok: true, adset_id: adsetId, status, meta: data });
+    }
+
     return res.status(400).json({ ok: false, error: `Unknown POST op: ${op}` });
   } catch (error) {
     return sendError(res, error);

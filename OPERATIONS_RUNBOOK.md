@@ -81,6 +81,8 @@ For background Meta account audits, use the Vercel-authenticated read-only endpo
 
 `META_ALLOWED_ACCOUNTS` must contain exactly the approved accounts `239740063602735` and `586574771435951`. These endpoints do not activate, pause, or edit campaigns.
 
+Authenticated Meta bridge writes support `set_ad_status` and `set_adset_status`; both verify the object's owning account against `META_ALLOWED_ACCOUNTS`. Use the ad-set operation for the exact post-verification consolidation IDs below instead of Ads Manager.
+
 The legacy SG repair path is locked by two independent production gates: paid delivery must already be enabled and `META_TEST_RELAUNCH_APPROVED=true` must be set explicitly. Its read endpoint is non-mutating. The candidate set contains Nightlife–EDM and Tech–Finance only; Dining–Cafe is excluded.
 
 ### Meta test definitions after tracking verification
