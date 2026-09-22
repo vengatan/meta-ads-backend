@@ -575,6 +575,53 @@ app.get("/api/account-structure", async (req, res) => {
   }
 });
 
+// Path-parameter reporting routes for automated read-only clients.
+// Keeping report parameters out of the query string avoids Deployment Protection
+// share-URL/SSO rewriting issues while preserving Vercel authentication.
+app.get("/api/report/insights/:accountId/:level/:since/:until", async (req, res) => {
+  res.set("cache-control", "no-store");
+  try {
+    const accountId = requireAllowedAccount(req.params.accountId);
+    const level = String(req.params.level || "campaign");
+    if (!["campaign", "adset", "ad"].includes(level)) {
+      return res.status(400).json({ ok: false, error: "level must be campaign, adset, or ad" });
+    }
+    const datePattern = /^\\d{4}-\\d{2}-\\d{2}$/;
+    const since = String(req.params.since || "");
+    const until = String(req.params.until || "");
+    if (!datePattern.test(since) || !datePattern.test(until) || Number.isNaN(Date.parse(`${since}T00:00:00Z`)) || Number.isNaN(Date.parse(`${until}T00:00:00Z`))) {
+      return res.status(400).json({ ok: false, error: "since and until must be valid YYYY-MM-DD dates" });
+    }
+    const elapsedDays = (Date.parse(`${until}T00:00:00Z`) - Date.parse(`${since}T00:00:00Z`)) / 86400000;
+    if (elapsedDays < 0 || elapsedDays > 92) {
+      return res.status(400).json({ ok: false, error: "Date range must be between 0 and 92 days" });
+    }
+    const insights = await graphGet(`${accountId}/insights`, {
+      fields: "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,reach,clicks,ctr,cpc,cpm,frequency,actions,action_values,cost_per_action_type",
+      level,
+      time_range: JSON.stringify({ since, until }),
+      limit: 100
+    });
+    return res.status(200).json({ ok: true, account_id: accountId, level, date_range: { since, until }, data: insights.data || [], has_more: Boolean(insights.paging?.next) });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+app.get("/api/report/account-structure/:accountId", async (req, res) => {
+  res.set("cache-control", "no-store");
+  try {
+    const accountId = requireAllowedAccount(req.params.accountId);
+    const [campaigns, adsets] = await Promise.all([
+      graphGetAll(`${accountId}/campaigns`, { fields: "id,name,status,effective_status,objective,buying_type,daily_budget,lifetime_budget,bid_strategy,start_time,stop_time", limit: 100 }),
+      graphGetAll(`${accountId}/adsets`, { fields: "id,name,status,effective_status,campaign_id,daily_budget,lifetime_budget,optimization_goal,billing_event,bid_strategy,attribution_spec,start_time,end_time", limit: 100 })
+    ]);
+    return res.status(200).json({ ok: true, account_id: accountId, campaigns: campaigns.data, adsets: adsets.data, has_more: campaigns.truncated || adsets.truncated, pages: { campaigns: campaigns.pages, adsets: adsets.pages } });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
 app.get("/api/zoho/paid-order/config", async (req, res) => {
   res.set("cache-control", "no-store");
   try {
