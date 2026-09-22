@@ -586,7 +586,7 @@ app.get("/api/report/insights/:accountId/:level/:since/:until", async (req, res)
     if (!["campaign", "adset", "ad"].includes(level)) {
       return res.status(400).json({ ok: false, error: "level must be campaign, adset, or ad" });
     }
-    const datePattern = /^\\d{4}-\\d{2}-\\d{2}$/;
+    const datePattern = new RegExp("^\\d{4}-\\d{2}-\\d{2}$");
     const since = String(req.params.since || "");
     const until = String(req.params.until || "");
     if (!datePattern.test(since) || !datePattern.test(until) || Number.isNaN(Date.parse(`${since}T00:00:00Z`)) || Number.isNaN(Date.parse(`${until}T00:00:00Z`))) {
