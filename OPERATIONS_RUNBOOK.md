@@ -121,7 +121,8 @@ The backend requires the variables listed in `.env.example`. In particular:
 
 - `PAID_CONVERSION_DELIVERY_ENABLED=true`
 - the Vercel and Zoho webhook secrets must match
-- `GA4_API_SECRETS_BY_ORG` must contain both organization IDs
+- `ZOHO_ORGANIZATION_IDS=747696142` limits this conversion endpoint to Prep Taiwan. Singapore uses its separate PrestaShop tracking and is not a prerequisite for Taiwan delivery.
+- `GA4_API_SECRETS_BY_ORG` must contain the Taiwan organization ID `747696142`
 - direct Meta CAPI requires a usable token and both pixel mappings
 - Vercel Deployment Protection automation bypass must remain installed in the Zoho function
 
@@ -160,7 +161,7 @@ The script prompts securely for the Taiwan and Singapore secrets, stores the org
 - Taiwan lead attribution capture is installed in `site/chn/orderform.php`.
 - Taiwan attribution transport was corrected on 16 September 2026: `fetch(..., mode: 'no-cors')` now sends `URLSearchParams(payload)` instead of JSON. A no-CORS JSON request was downgraded to plain text, causing Make to expose only a single `value` string and silently write only the column-A formula. The form-encoded request was verified with a non-order probe: Make mapped all 15 browser fields and wrote A:P. The probe and 17 historical formula-only artifacts were then deleted. Rollback copy: `orderform.php.codex-backup-20260916-form-post`.
 - Taiwan's live order form now captures GCLID, GBRAID, WBRAID, Meta browser/click IDs and UTM fields, validates the Google Forms message origin/source, and pushes one `order_form_submitted` event before redirect. Published GTM version `81` maps that event to GA4 `generate_lead` with its deterministic dataLayer event ID; legacy purchase tags remain paused. Rollback copy: `orderform.php.codex-backup-20260915-lead-event`.
-- Make scenario `4920018` stores attribution in the 16-column `Conversion Attribution` tab. Column A resolves the actual response Sheet `Order No` by matching column K `order_token` against `Form responses 1!AF:AF` and returning `Form responses 1!BW:BW`; this is the canonical join and is not a row number. Columns L:P preserve GBRAID, WBRAID, FBCLID, UTM term, and UTM content. The header protection and filter cover A:P.
+- Make scenario `4920018` stores attribution in the 16-column `Conversion Attribution` tab. Column A resolves the actual response Sheet `Order No` by matching column K `order_token` against `Form responses 1!AF:AF` and returning `Form responses 1!BV:BV`; this is the canonical join and is not a row number. Columns L:P preserve GBRAID, WBRAID, FBCLID, UTM term, and UTM content. The header protection and filter cover A:P.
 - Singapore's unpaid/duplicate order-confirmation purchase hooks are disabled in both `stapega4` and `stapetracking`; backups: `stapega4.php.codex-backup-20260915` and `stapetracking.php.codex-backup-20260915`.
 - Singapore's order confirmation now pushes non-PII `order_form_submitted`, and published GTM version `38` maps it once to GA4 `generate_lead`. Published version `39` pauses the final legacy Purchase dataLayer builder. The live container contains `order_form_submitted`/`generate_lead` and no active legacy Purchase builder.
 - Vercel Deployment Protection has an automation bypass, and the Zoho function includes its header.
@@ -168,10 +169,20 @@ The script prompts securely for the Taiwan and Singapore secrets, stores the org
 - Production delivery and GA4 Measurement Protocol readiness must be verified after the next environment update and redeployment.
 - Vercel CLI access is now stored with Windows CurrentUser DPAPI at `%LOCALAPPDATA%\Vensure\meta-ads-backend\vercel-token.dpapi`; team access to `venga-s-projects` was verified. The sync script gives this encrypted credential precedence over any stale plaintext token in `.env.local`.
 - The Zoho/Vercel paid-order webhook secret was rotated together, stored as a hidden Vercel Secret, deployed in production deployment `dpl_7dkki11BTLWGiHbMDF7cshSgySkg`, and authenticated successfully against the production config endpoint.
-- Direct Meta CAPI credentials are configured and API-accessible for both pixels. Production delivery remains off because `GA4_API_SECRETS_BY_ORG` is not configured; do not enable the delivery flag until both GA4 stream secrets exist.
+- Direct Meta CAPI credentials are configured and API-accessible for both pixels. Production delivery remains off because `GA4_API_SECRETS_BY_ORG` is not configured; This prior two-country gate is superseded by the Taiwan-only configuration recorded below.
 - Production Meta account access now allows both approved ad accounts (`239740063602735` and `586574771435951`). The read-only insights endpoint was verified against both accounts after deployment `dpl_HjcnncSEYf4vh9uEuprK7GBeR2J6`.
 - The paid-order backend contract accepts GA client/session IDs, GCLID/GBRAID/WBRAID, Meta IDs and UTM fields. GA4 `transaction_id` is the canonical response Sheet Order Number; the hashed `event_id` is reserved for cross-platform deduplication.
 - Active Make scenario `4920650` receives the canonical response Order Number, searches column A of `Conversion Attribution`, and returns only advertising attribution fields. Its existing Google connection `284990` is healthy. The webhook URL is stored in the Zoho function and must not be copied into documentation or chat.
 - The deployed Zoho function now calls scenario `4920650` with `reference_number` before dispatching a paid order. A matching row enriches the backend payload with GA/Meta/click/UTM fields; a missing row returns Make's plain `Accepted` response and is safely left unenriched and undispatched. No Sheet row number or Zoho `salesorder_number` is used.
 - Zoho custom-function history confirms paid order `6525` reached both the Make lookup and Vercel paid-order endpoint while delivery was disabled; the function completed safely and left `cf_paid_conversion_dispatched=false`. Successful-but-undispatched runs can be retried after activation with the Zoho Workflow execute-custom-function action, using the Sales Order entity ID rather than replaying only failed history records.
 - The lookup was verified with a temporary non-order probe covering all 16 attribution columns. The probe and 37 formula-only setup rows (all other cells empty) were removed immediately after verification; the production tab contains no synthetic test order.
+
+## Verified production repair — 10 October 2026
+
+- User clarified that Zoho paid-order conversion dispatch is for Prep Taiwan; Singapore uses PrestaShop tracking. Do not make a Singapore GA4 secret a Taiwan deployment prerequisite. Singapore tracking still requires its own independent audit.
+- Production Zoho organization allowlist is now `747696142` only. Taiwan secret mapping is stored as sensitive Production configuration; no secret values belong in this file. Existing GA4 secrets were not modified or removed.
+- Delivery was enabled and exact-source redeployment `dpl_EYqEHtjiePyqDJ7RzrjCAGUSsMnD` reached READY on `meta-ads-backend-two.vercel.app`.
+- Make lookup scenario `4920650`, response module 3, now explicitly returns `Content-Type: application/json`. Before this fix, Zoho received an unusable response and caught an Invalid JSON Format String error, discarding the attribution fields despite a matching Sheet row.
+- Zoho custom function retains paid-status and idempotency gates and now logs only the backend delivery result (mode, complete, per-channel status).
+- Real paid order `6537` returned `mode=enabled`, `complete=true`, `ga4=sent`, `meta=sent:direct`; Zoho then persisted `cf_paid_conversion_dispatched=true` and its event ID. GA4 realtime subsequently returned one purchase event. Ads attribution and Meta browser/server deduplication remain independently unverified.
+- Order `6561` had no matching attribution row; it remains undispatched. Do not invent attribution or replay successful purchases. Review missing capture rows and historical Make failures separately.
