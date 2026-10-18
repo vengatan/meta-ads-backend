@@ -310,7 +310,8 @@ test("accepts Singapore paid orders and sends the PrestaShop transaction ID to S
       paid_status: "paid",
       amount: 270.5,
       currency: "SGD",
-      ga_client_id: "123456789.987654321"
+      ga_client_id: "123456789.987654321",
+      ga_session_id: "1789812345"
     });
     const data = await response.json();
     assert.equal(response.status, 200);
@@ -319,6 +320,7 @@ test("accepts Singapore paid orders and sends the PrestaShop transaction ID to S
     assert.equal(sentPayload.events[0].params.transaction_id, "5097");
     assert.equal(sentPayload.events[0].params.value, 270.5);
     assert.equal(sentPayload.events[0].params.currency, "SGD");
+    assert.equal(sentPayload.events[0].params.session_id, 1789812345);
   } finally {
     globalThis.fetch = previousFetch;
     if (prior.measurement === undefined) delete process.env.GA4_MEASUREMENT_ID_SINGAPORE;
