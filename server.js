@@ -70,10 +70,13 @@ function requireBridgeAuth(req) {
   if (!safeEqual(suppliedBridgeKey(req), bridgeKey())) throw Object.assign(new Error("Unauthorized"), { status: 401 });
 }
 
-function paidOrderWebhookSecret() {
-  const value = process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET;
-  if (!value) throw Object.assign(new Error("ZOHO_PAID_ORDER_WEBHOOK_SECRET is not configured"), { status: 503 });
-  return value;
+function paidOrderWebhookSecrets() {
+  const values = [
+    process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET,
+    process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET_PREVIOUS
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  if (!values.length) throw Object.assign(new Error("ZOHO_PAID_ORDER_WEBHOOK_SECRET is not configured"), { status: 503 });
+  return [...new Set(values)];
 }
 
 function organizationSetting(mapName, fallbackName, organizationId) {
@@ -158,7 +161,7 @@ async function postStapeMetaCapi(events, organizationId) {
 
 function requirePaidOrderWebhookAuth(req) {
   const supplied = req.get("x-zoho-paid-order-secret") || suppliedBridgeKey(req);
-  if (!safeEqual(supplied, paidOrderWebhookSecret())) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+  if (!paidOrderWebhookSecrets().some((secret) => safeEqual(supplied, secret))) throw Object.assign(new Error("Unauthorized"), { status: 401 });
 }
 
 function parsePaidOrder(payload) {
