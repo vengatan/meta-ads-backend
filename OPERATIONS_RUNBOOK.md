@@ -60,6 +60,7 @@ Use the first option that is available. Move to a fallback only after recording 
 
 1. Machine-to-machine traffic must never depend on a human dashboard session.
 2. Zoho sends both `x-zoho-paid-order-secret` and `x-vercel-protection-bypass`. The matching values live in Zoho and Vercel only.
+3. During an approved webhook-secret rotation, the backend may temporarily accept `ZOHO_PAID_ORDER_WEBHOOK_SECRET_PREVIOUS` alongside the current secret. Remove the temporary value and redeploy after Zoho is switched and verification succeeds.
 3. Vercel secrets live in Production environment variables. Local copies belong only in ignored `.env.local`.
 4. `VERCEL_TOKEN` must be a team-scoped token with access to `venga-s-projects/meta-ads-backend`. Validate it with `vercel whoami` before relying on it. The connected Vercel integration is the preferred persistent access path.
 5. Browser login is only a fallback for dashboard-only actions. A browser session can expire; that is separate from webhook authentication and must not stop paid-order delivery.
