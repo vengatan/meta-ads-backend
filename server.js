@@ -707,6 +707,7 @@ app.post("/api/prestashop/paid-order", async (req, res) => {
     const orderId = String(req.body?.order_id || "").trim();
     const paidStatus = String(req.body?.paid_status || "").trim().toLowerCase();
     const clientId = String(req.body?.ga_client_id || "").trim();
+    const sessionId = String(req.body?.ga_session_id || "").trim();
     const currency = String(req.body?.currency || "").trim().toUpperCase();
     const amount = Number(req.body?.amount);
 
@@ -718,6 +719,9 @@ app.post("/api/prestashop/paid-order", async (req, res) => {
     }
     if (!clientId || clientId.length > 100 || !Number.isFinite(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) {
       throw Object.assign(new Error("ga_client_id, positive amount, and ISO 4217 currency are required"), { status: 400 });
+    }
+    if (sessionId && !/^\d+$/.test(sessionId)) {
+      throw Object.assign(new Error("ga_session_id must be a numeric GA4 session ID"), { status: 400 });
     }
 
     const measurementId = String(process.env.GA4_MEASUREMENT_ID_SINGAPORE || "").trim();
@@ -735,9 +739,7 @@ app.post("/api/prestashop/paid-order", async (req, res) => {
           value: amount,
           currency,
           engagement_time_msec: 1,
-          ...(String(req.body?.ga_session_id || "").trim()
-            ? { session_id: String(req.body.ga_session_id).trim() }
-            : {})
+          ...(sessionId ? { session_id: Number(sessionId) } : {})
         }
       }]
     };
