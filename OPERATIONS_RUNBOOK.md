@@ -187,3 +187,11 @@ The script prompts securely for the Taiwan and Singapore secrets, stores the org
 - Zoho custom function retains paid-status and idempotency gates and now logs only the backend delivery result (mode, complete, per-channel status).
 - Real paid order `6537` returned `mode=enabled`, `complete=true`, `ga4=sent`, `meta=sent:direct`; Zoho then persisted `cf_paid_conversion_dispatched=true` and its event ID. GA4 realtime subsequently returned one purchase event. Ads attribution and Meta browser/server deduplication remain independently unverified.
 - Order `6561` had no matching attribution row; it remains undispatched. Do not invent attribution or replay successful purchases. Review missing capture rows and historical Make failures separately.
+
+
+## Webhook credential rotation in progress — 18 October 2026
+
+- The paid-order backend now accepts the current webhook secret and an optional temporary previous secret, with regression coverage for the overlap.
+- The canonical Production project's webhook secret has been rotated. The prior value is temporarily configured as `ZOHO_PAID_ORDER_WEBHOOK_SECRET_PREVIOUS` so current Zoho dispatch continues during deployment.
+- Next: wait for the deployment using the new Production value, update Zoho function `paid_order_conversion_dispatch` to the new shared webhook secret, verify the next genuine paid order, then remove the temporary previous secret and redeploy.
+- The connected Vercel API rejected automation bypass token creation with HTTP 403. The existing Zoho bypass header remains unchanged; retry through another channel only with permission actually available.
