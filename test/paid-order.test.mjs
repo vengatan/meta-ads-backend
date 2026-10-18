@@ -4,6 +4,7 @@ import { once } from "node:events";
 import test from "node:test";
 
 process.env.ZOHO_ORGANIZATION_ID = "747696142";
+process.env.PRESTASHOP_SG_PAID_ORDER_WEBHOOK_SECRET = "presta-test-secret";
 process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET = "test-secret";
 process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET_PREVIOUS = "previous-test-secret";
 delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
@@ -12,6 +13,17 @@ const { default: app } = await import("../server.js");
 const server = app.listen(0);
 await once(server, "listening");
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+async function postPresta(payload, secret = "presta-test-secret") {
+  return fetch(`${baseUrl}/api/prestashop/paid-order`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-prestashop-sg-secret": secret
+    },
+    body: JSON.stringify(payload)
+  });
+}
 
 function paidOrder(overrides = {}) {
   return {
@@ -274,6 +286,84 @@ test("accepts the previous webhook secret during rotation overlap", async () => 
   assert.equal(response.status, 200);
   assert.equal(data.ok, true);
   assert.equal(data.delivery.mode, "disabled");
+});
+
+test("accepts Singapore paid orders and sends the PrestaShop transaction ID to Singapore GA4", async () => {
+  const previousFetch = globalThis.fetch;
+  const prior = {
+    measurement: process.env.GA4_MEASUREMENT_ID_SINGAPORE,
+    secret: process.env.GA4_API_SECRET_SINGAPORE
+  };
+  let sentPayload;
+  process.env.GA4_MEASUREMENT_ID_SINGAPORE = "G-L3QF8L60CP";
+  process.env.GA4_API_SECRET_SINGAPORE = "test-ga-secret";
+  globalThis.fetch = async (url, options) => {
+    if (String(url).includes("google-analytics.com/mp/collect")) {
+      sentPayload = JSON.parse(options.body);
+      return new Response(null, { status: 204 });
+    }
+    return previousFetch(url, options);
+  };
+  try {
+    const response = await postPresta({
+      order_id: "5097",
+      paid_status: "paid",
+      amount: 270.5,
+      currency: "SGD",
+      ga_client_id: "123456789.987654321"
+    });
+    const data = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(data.transaction_id, "5097");
+    assert.equal(sentPayload.events[0].name, "purchase");
+    assert.equal(sentPayload.events[0].params.transaction_id, "5097");
+    assert.equal(sentPayload.events[0].params.value, 270.5);
+    assert.equal(sentPayload.events[0].params.currency, "SGD");
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (prior.measurement === undefined) delete process.env.GA4_MEASUREMENT_ID_SINGAPORE;
+    else process.env.GA4_MEASUREMENT_ID_SINGAPORE = prior.measurement;
+    if (prior.secret === undefined) delete process.env.GA4_API_SECRET_SINGAPORE;
+    else process.env.GA4_API_SECRET_SINGAPORE = prior.secret;
+  }
+});
+
+test("rejects unpaid Singapore PrestaShop orders", async () => {
+  const response = await postPresta({
+    order_id: "5096",
+    paid_status: "unpaid",
+    amount: 270.5,
+    currency: "SGD",
+    ga_client_id: "123456789.987654321"
+  });
+  const data = await response.json();
+  assert.equal(response.status, 409);
+  assert.equal(data.error, "PrestaShop order is not paid");
+});
+
+test("rejects Singapore PrestaShop calls without a GA client ID", async () => {
+  const response = await postPresta({
+    order_id: "5097",
+    paid_status: "paid",
+    amount: 270.5,
+    currency: "SGD"
+  });
+  const data = await response.json();
+  assert.equal(response.status, 400);
+  assert.match(data.error, /ga_client_id/);
+});
+
+test("requires the dedicated Singapore PrestaShop webhook secret", async () => {
+  const response = await postPresta({
+    order_id: "5097",
+    paid_status: "paid",
+    amount: 270.5,
+    currency: "SGD",
+    ga_client_id: "123456789.987654321"
+  }, "wrong-secret");
+  const data = await response.json();
+  assert.equal(response.status, 401);
+  assert.equal(data.error, "Unauthorized");
 });
 
 test.after(() => server.close());
