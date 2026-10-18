@@ -5,6 +5,7 @@ import test from "node:test";
 
 process.env.ZOHO_ORGANIZATION_ID = "747696142";
 process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET = "test-secret";
+process.env.ZOHO_PAID_ORDER_WEBHOOK_SECRET_PREVIOUS = "previous-test-secret";
 delete process.env.PAID_CONVERSION_DELIVERY_ENABLED;
 
 const { default: app } = await import("../server.js");
@@ -264,6 +265,15 @@ test("rejects an invalid webhook secret", async () => {
 
   assert.equal(response.status, 401);
   assert.equal(data.error, "Unauthorized");
+});
+
+test("accepts the previous webhook secret during rotation overlap", async () => {
+  const response = await post(paidOrder(), "previous-test-secret");
+  const data = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(data.ok, true);
+  assert.equal(data.delivery.mode, "disabled");
 });
 
 test.after(() => server.close());
