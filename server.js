@@ -79,6 +79,19 @@ function paidOrderWebhookSecrets() {
   return [...new Set(values)];
 }
 
+function singaporePrestaShopWebhookSecret() {
+  const secret = String(process.env.PRESTASHOP_SG_PAID_ORDER_WEBHOOK_SECRET || "").trim();
+  if (!secret) throw Object.assign(new Error("PRESTASHOP_SG_PAID_ORDER_WEBHOOK_SECRET is not configured"), { status: 503 });
+  return secret;
+}
+
+function requireSingaporePrestaShopWebhookAuth(req) {
+  const supplied = req.get("x-prestashop-sg-secret") || "";
+  if (!safeEqual(supplied, singaporePrestaShopWebhookSecret())) {
+    throw Object.assign(new Error("Unauthorized"), { status: 401 });
+  }
+}
+
 function organizationSetting(mapName, fallbackName, organizationId) {
   const rawMap = String(process.env[mapName] || "").trim();
   if (rawMap) {
@@ -682,6 +695,68 @@ app.post("/api/zoho/paid-order", async (req, res) => {
       deliveryMode: delivery.mode
     });
     return res.status(200).json({ ok: true, event_id: order.eventId, delivery });
+  } catch (error) {
+    return sendError(res, error);
+  }
+});
+
+app.post("/api/prestashop/paid-order", async (req, res) => {
+  res.set("cache-control", "no-store");
+  try {
+    requireSingaporePrestaShopWebhookAuth(req);
+    const orderId = String(req.body?.order_id || "").trim();
+    const paidStatus = String(req.body?.paid_status || "").trim().toLowerCase();
+    const clientId = String(req.body?.ga_client_id || "").trim();
+    const sessionId = String(req.body?.ga_session_id || "").trim();
+    const currency = String(req.body?.currency || "").trim().toUpperCase();
+    const amount = Number(req.body?.amount);
+
+    if (!/^\d+$/.test(orderId) || Number(orderId) <= 0) {
+      throw Object.assign(new Error("order_id must be a positive integer"), { status: 400 });
+    }
+    if (paidStatus !== "paid") {
+      throw Object.assign(new Error("PrestaShop order is not paid"), { status: 409 });
+    }
+    if (!clientId || clientId.length > 100 || !Number.isFinite(amount) || amount <= 0 || !/^[A-Z]{3}$/.test(currency)) {
+      throw Object.assign(new Error("ga_client_id, positive amount, and ISO 4217 currency are required"), { status: 400 });
+    }
+    if (sessionId && !/^\d+$/.test(sessionId)) {
+      throw Object.assign(new Error("ga_session_id must be a numeric GA4 session ID"), { status: 400 });
+    }
+
+    const measurementId = String(process.env.GA4_MEASUREMENT_ID_SINGAPORE || "").trim();
+    const apiSecret = String(process.env.GA4_API_SECRET_SINGAPORE || "").trim();
+    if (!/^G-[A-Z0-9]+$/.test(measurementId) || !apiSecret) {
+      throw Object.assign(new Error("Singapore GA4 Measurement Protocol is not configured"), { status: 503 });
+    }
+
+    const gaPayload = {
+      client_id: clientId,
+      events: [{
+        name: "purchase",
+        params: {
+          transaction_id: orderId,
+          value: amount,
+          currency,
+          engagement_time_msec: 1,
+          ...(sessionId ? { session_id: Number(sessionId) } : {})
+        }
+      }]
+    };
+    const response = await fetch(
+      `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(gaPayload)
+      }
+    );
+    if (!response.ok) {
+      throw Object.assign(new Error(`GA4 Singapore purchase delivery failed (${response.status})`), { status: 502 });
+    }
+
+    console.log("PrestaShop Singapore paid purchase accepted by GA4", { orderId });
+    return res.status(200).json({ ok: true, transaction_id: orderId, ga4: "accepted" });
   } catch (error) {
     return sendError(res, error);
   }
